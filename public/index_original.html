@@ -66,7 +66,7 @@
 </head>
 <body>
     <div id="container">
-        <button id="resolution-toggle" class="resolution-toggle" onclick="toggleResolution()">Switch to High Resolution</button>
+        <button id="resolution-toggle" class="resolution-toggle" onclick="toggleResolution()">Switch to Low Resolution</button>
         <div class="legend">
             <div class="legend-gradient"></div>
             <span>Low → High Elevation</span>
@@ -76,7 +76,7 @@
     </div>
     
     <script>
-        let currentResolution = 'low';
+        let currentResolution = 'high';
 
         async function fetchData() {
             const response = await fetch(`/api/elevation-data${currentResolution === 'high' ? '?resolution=high' : ''}`);

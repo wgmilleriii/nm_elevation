@@ -1,1 +1,152 @@
- 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Mexico Elevation Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        #container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #visualization {
+            width: 100%;
+            height: 800px;
+            border: 1px solid #ddd;
+            background: white;
+        }
+        .point {
+            transition: r 0.2s;
+        }
+        .point:hover {
+            r: 4;
+        }
+        #stats {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .legend {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .legend-gradient {
+            width: 200px;
+            height: 20px;
+            margin-right: 10px;
+            background: linear-gradient(to right, #0000ff, #ffff00);
+        }
+        .resolution-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .resolution-toggle:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <button id="resolution-toggle" class="resolution-toggle" onclick="toggleResolution()">Switch to Low Resolution</button>
+        <div class="legend">
+            <div class="legend-gradient"></div>
+            <span>Low → High Elevation</span>
+        </div>
+        <svg id="visualization" preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="stats"></div>
+    </div>
+    
+    <script>
+        let currentResolution = 'high';
+
+        async function fetchData() {
+            const response = await fetch(`/api/elevation-data${currentResolution === 'high' ? '?resolution=high' : ''}`);
+            return response.json();
+        }
+
+        function getElevationColor(elevation, minElevation, maxElevation) {
+            if (elevation === null) {
+                return 'rgba(255, 255, 255, 0.5)';
+            }
+            const normalizedElevation = (elevation - minElevation) / (maxElevation - minElevation);
+            const r = Math.round(normalizedElevation * 255);
+            const g = Math.round(normalizedElevation * 255);
+            const b = Math.round(255 * (1 - normalizedElevation));
+            return `rgb(${r},${g},${b})`;
+        }
+
+        async function toggleResolution() {
+            const button = document.getElementById('resolution-toggle');
+            currentResolution = currentResolution === 'low' ? 'high' : 'low';
+            button.textContent = `Switch to ${currentResolution === 'low' ? 'High' : 'Low'} Resolution`;
+            await visualizeData();
+        }
+
+        async function visualizeData() {
+            const { points, stats } = await fetchData();
+            const svg = document.getElementById('visualization');
+            
+            // Clear existing points
+            svg.innerHTML = '';
+            
+            // Calculate dimensions
+            const width = svg.clientWidth;
+            const height = svg.clientHeight;
+            const padding = 20;
+            
+            // Find bounds
+            const minLat = 31.33;
+            const maxLat = 37.00;
+            const minLon = -109.05;
+            const maxLon = -103.00;
+            
+            // Create points
+            points.forEach(point => {
+                const x = ((point.longitude - minLon) / (maxLon - minLon)) * (width - 2 * padding) + padding;
+                const y = height - (((point.latitude - minLat) / (maxLat - minLat)) * (height - 2 * padding) + padding);
+                
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute('cx', x);
+                circle.setAttribute('cy', y);
+                circle.setAttribute('r', 2);
+                circle.setAttribute('fill', getElevationColor(point.elevation, stats.min_elevation, stats.max_elevation));
+                circle.setAttribute('class', 'point');
+                
+                // Add tooltip
+                circle.setAttribute('title', `Lat: ${point.latitude.toFixed(4)}, Lon: ${point.longitude.toFixed(4)}\nElevation: ${point.elevation.toFixed(1)}m`);
+                
+                svg.appendChild(circle);
+            });
+            
+            // Update stats
+            document.getElementById('stats').innerHTML = `
+                Points: ${stats.point_count.toLocaleString()}<br>
+                Elevation Range: ${stats.min_elevation.toFixed(1)}m to ${stats.max_elevation.toFixed(1)}m<br>
+                Resolution: ${stats.resolution}
+            `;
+        }
+
+        // Initialize visualization
+        visualizeData();
+    </script>
+</body>
+</html> 
