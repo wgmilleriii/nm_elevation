@@ -1,8 +1,17 @@
 body {
     font-family: Arial, sans-serif;
     margin: 0;
-    padding: 0;
+    padding: 20px;
     background: #f0f0f0;
+}
+
+#container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .row {
@@ -13,16 +22,16 @@ body {
 
 #map {
     width: 35%;
-    height: 600px;
-    background: white;
+    height: 800px;
     border: 1px solid #ddd;
+    background: white;
 }
 
 #svg1 {
     width: 65%;
-    height: 600px;
-    background: white;
+    height: 800px;
     border: 1px solid #ddd;
+    background: white;
 }
 
 #svg2 {
@@ -30,4 +39,32 @@ body {
     height: 200px;
     background: #fafafa;
     border: 1px solid #ddd;
+}
+
+.point {
+    transition: r 0.2s;
+}
+
+.point:hover {
+    r: 4;
+}
+
+#stats {
+    margin-top: 20px;
+    padding: 10px;
+    background: #f8f8f8;
+    border-radius: 4px;
+}
+
+.legend {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.legend-gradient {
+    width: 200px;
+    height: 20px;
+    margin-right: 10px;
+    background: linear-gradient(to right, #0000ff, #ffff00);
 } 

@@ -3,17 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Mexico Elevation - Minimal</title>
+    <title>New Mexico Elevation - Interactive</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="css/face.css" />
 </head>
 <body>
-    <div class="row">
-        <div id="map"></div>
-        <svg id="svg1"></svg>
-    </div>
-    <div class="row">
-        <svg id="svg2"></svg>
+    <div id="container">
+        <div class="row">
+            <div id="map"></div>
+            <svg id="svg1" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <div class="legend">
+            <div class="legend-gradient"></div>
+            <span>Low → High Elevation</span>
+        </div>
+        <div id="stats"></div>
+        <div class="row">
+            <svg id="svg2"></svg>
+        </div>
     </div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>

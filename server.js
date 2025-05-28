@@ -36,7 +36,8 @@ async function getDb() {
 
 app.get('/api/elevation-data', async (req, res) => {
     try {
-        console.log('Received request for elevation data');
+        const isHighRes = req.query.resolution === 'high';
+        console.log(`Received request for elevation data (${isHighRes ? 'high' : 'low'} resolution)`);
         const db = await getDb();
         
         // Check if table exists
@@ -46,7 +47,19 @@ app.get('/api/elevation-data', async (req, res) => {
             throw new Error('Database table not found');
         }
         
-        const data = await db.all('SELECT latitude, longitude, elevation FROM elevation_points');
+        // In low-res mode, only select every 10th point using ROW_NUMBER
+        const query = isHighRes ? 
+            'SELECT latitude, longitude, elevation FROM elevation_points' :
+            `WITH numbered_points AS (
+                SELECT latitude, longitude, elevation,
+                ROW_NUMBER() OVER (ORDER BY latitude, longitude) as row_num
+                FROM elevation_points
+            )
+            SELECT latitude, longitude, elevation
+            FROM numbered_points
+            WHERE row_num % 10 = 0`;
+        
+        const data = await db.all(query);
         console.log(`Found ${data.length} elevation points`);
         
         await db.close();
@@ -67,7 +80,8 @@ app.get('/api/elevation-data', async (req, res) => {
         const stats = {
             min_elevation: minElevation,
             max_elevation: maxElevation,
-            point_count: data.length
+            point_count: data.length,
+            resolution: isHighRes ? 'high' : 'low'
         };
         
         console.log('Sending response with stats:', stats);

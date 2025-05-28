@@ -19,7 +19,7 @@ const ElevationCircle = L.CircleMarker.extend({
 
 // --- SVG1: Elevation Points ---
 async function fetchData() {
-    const response = await fetch('/api/elevation-data');
+    const response = await fetch('/api/elevation-data?resolution=high');
     return response.json();
 }
 
@@ -74,7 +74,7 @@ async function updateMapPoints() {
 
     // Sample points from each grid cell
     const sampledPoints = [];
-    const pointsPerCell = Math.ceil(100 / (gridSize * gridSize));
+    const pointsPerCell = Math.ceil(500 / (gridSize * gridSize));
     
     for (let i = 0; i < gridSize; i++) {
         for (let j = 0; j < gridSize; j++) {
@@ -113,6 +113,12 @@ async function updateMapPoints() {
         
         circle.addTo(mapPointsLayer);
     });
+
+    // Update stats
+    document.getElementById('stats').innerHTML = `
+        Points: ${data.points.length.toLocaleString()}<br>
+        Elevation Range: ${data.stats.min_elevation.toFixed(1)}m to ${data.stats.max_elevation.toFixed(1)}m
+    `;
 }
 
 async function renderSVG1() {
@@ -127,8 +133,8 @@ async function renderSVG1() {
     const points = data.points;
     if (!points || points.length === 0) return;
 
-    // Sample every 10th point for low resolution
-    const sampledPoints = points.filter((_, index) => index % 10 === 0);
+    // Use all points for high resolution
+    const sampledPoints = points;
 
     let minLat = sampledPoints[0].latitude, maxLat = sampledPoints[0].latitude;
     let minLon = sampledPoints[0].longitude, maxLon = sampledPoints[0].longitude;
