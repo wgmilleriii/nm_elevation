@@ -106,7 +106,7 @@ yarn-error.log*
 
 # Database files
 *.db
-mountains.db
+# mountains.db (removed from ignore to allow tracking)
 *.sqlite
 *.sqlite3
 
