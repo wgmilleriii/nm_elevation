@@ -379,6 +379,14 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
         const points = calculateGridPoints(bounds, 10, collectionDirection);
         logProgress(`Generated ${points.length} points for level ${level + 1}`);
 
+        // Debug: Log how many points already exist in the database
+        let existingCount = 0;
+        for (const point of points) {
+            const exists = await checkPointExists(db, point.lat, point.lon);
+            if (exists) existingCount++;
+        }
+        logProgress(`Debug: ${existingCount} points already exist in the database for level ${level + 1}`);
+
         // Save progress to database with direction info
         await db.run(
             'INSERT INTO collection_progress (current_level, points_collected, bounds, collection_direction) VALUES (?, 0, ?, ?)',
