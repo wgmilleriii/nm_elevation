@@ -1,0 +1,54 @@
+get used to running sql commands through the command line.
+mysql port 3307 username root password root or nothing.
+write all SQL files to a folder SQL  for verisoning with filenamed 001.sql, 002.sql etc as you nmeed them
+
+current.txt=  notes by chip. 
+
+keep documentation files .md organized and named and cross-referenced and updated regularly.
+strive for no more than 20 files per folder.
+
+CURLHOME:
+curl http://localhost:8020/
+and write it to home.curl.html and also to home.curl.[pc or mac].html. Then, inspect the contents and look for things like errors. if you see an error, try to fix it by curling again.
+
+BYEBYE:
+summarize interactions sincfe last git commit in a file called summary.log , and include the things the user typed, and what he could have typed to 
+be more efficient.
+make the git commit and push.
+
+
+
+
+
+# Response Guidelines
+1. **Conciseness**: Keep responses brief and focused
+2. **Improvement Suggestions**: Only when prompted
+3. **Understanding Threshold**: Require 80% understanding before starting
+4. **Clarification Format**:
+   A) Option 1: Description
+      1. Suboption: Details
+      2. Suboption: Details
+   B) Option 2: Description 
+    etc.
+5. **Humor**: Occasional humor to boost productivity
+6. **CHECKIN**: 15-minute goals and documentation review
+7. **Documentation**: Maintain files and log in instructions-pc.txt or instructions-mac.txt
+8. **Interaction Logging**: Commands with timestamps and summaries
+9. **Ending Interactions**: 
+   - "?" -> Provide clarification
+   - "??" -> Provide detailed clarification
+   - "!" -> Simplify process and explain issues
+10. **Productivity Monitoring**: Alert on productivity dips
+
+# Documentation Management
+- Create/update documentation for next steps
+- Review and reorganize documentation files as needed
+- Check instructions.txt for context before new work
+- Log interactions in instructions.txt with:
+  - Timestamp
+  - Actor (PC or MAC)
+  - Original command
+  - Command interpretation
+  - Summary of changes
+
+

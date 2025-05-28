@@ -5,124 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>New Mexico Elevation - Minimal</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: #f0f0f0;
-        }
-        #map {
-            width: 100vw;
-            height: 400px;
-            border-bottom: 2px solid #ddd;
-        }
-        #svg1 {
-            display: block;
-            margin: 0 auto;
-            background: white;
-            width: 100vw;
-            max-width: 1200px;
-            height: 600px;
-            border-bottom: 2px solid #ddd;
-        }
-        #svg2 {
-            display: block;
-            margin: 0 auto 40px auto;
-            background: #fafafa;
-            width: 100vw;
-            max-width: 1200px;
-            height: 200px;
-        }
-    </style>
+    <link rel="stylesheet" href="css/face.css" />
 </head>
 <body>
-    <div id="map"></div>
-    <svg id="svg1"></svg>
-    <svg id="svg2"></svg>
+    <div class="row">
+        <div id="map"></div>
+        <svg id="svg1"></svg>
+    </div>
+    <div class="row">
+        <svg id="svg2"></svg>
+    </div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script>
-    // --- MAP ---
-    const map = L.map('map').setView([34.5, -106.5], 7); // Centered on New Mexico
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
-    
-    // --- SVG1: Elevation Points ---
-    async function fetchData() {
-        const response = await fetch('/api/elevation-data');
-        return response.json();
-    }
-
-    function getElevationColor(elevation, minElevation, maxElevation) {
-        if (elevation === null) {
-            return 'rgba(255,255,255,0.5)';
-        }
-        const normalized = (elevation - minElevation) / (maxElevation - minElevation);
-        const r = Math.round(normalized * 255);
-        const g = Math.round(normalized * 255);
-        const b = Math.round(255 * (1 - normalized));
-        return `rgb(${r},${g},${b})`;
-    }
-
-    async function renderSVG1() {
-        const data = await fetchData();
-        const svg = document.getElementById('svg1');
-        svg.innerHTML = '';
-        svg.setAttribute('width', svg.clientWidth);
-        svg.setAttribute('height', svg.clientHeight);
-        const width = svg.clientWidth;
-        const height = svg.clientHeight;
-        const padding = 20;
-        const points = data.points;
-        if (!points || points.length === 0) return;
-        let minLat = points[0].latitude, maxLat = points[0].latitude;
-        let minLon = points[0].longitude, maxLon = points[0].longitude;
-        for (let i = 1; i < points.length; i++) {
-            const p = points[i];
-            if (p.latitude < minLat) minLat = p.latitude;
-            if (p.latitude > maxLat) maxLat = p.latitude;
-            if (p.longitude < minLon) minLon = p.longitude;
-            if (p.longitude > maxLon) maxLon = p.longitude;
-        }
-        const xScale = (width - 2 * padding) / (maxLon - minLon);
-        const yScale = (height - 2 * padding) / (maxLat - minLat);
-        points.forEach(point => {
-            const x = (point.longitude - minLon) * xScale + padding;
-            const y = height - ((point.latitude - minLat) * yScale + padding);
-            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            circle.setAttribute('cx', x);
-            circle.setAttribute('cy', y);
-            circle.setAttribute('r', 2);
-            circle.setAttribute('fill', getElevationColor(point.elevation, data.stats.min_elevation, data.stats.max_elevation));
-            svg.appendChild(circle);
-        });
-    }
-
-    // --- SVG2: Placeholder ---
-    function renderSVG2() {
-        const svg = document.getElementById('svg2');
-        svg.innerHTML = '';
-        svg.setAttribute('width', svg.clientWidth);
-        svg.setAttribute('height', svg.clientHeight);
-        // Placeholder: simple text
-        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', svg.clientWidth / 2);
-        text.setAttribute('y', svg.clientHeight / 2);
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('dominant-baseline', 'middle');
-        text.setAttribute('font-size', '32');
-        text.setAttribute('fill', '#bbb');
-        text.textContent = 'SVG2 Placeholder';
-        svg.appendChild(text);
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-        renderSVG1();
-        renderSVG2();
-    });
-    </script>
+    <script src="js/face.js"></script>
 </body>
 </html> 
