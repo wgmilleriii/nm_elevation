@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sandia Mountains Depth View</title>
+    <link rel="stylesheet" href="css/sandia-view.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+    <div id="controls">
+        <div class="control-group">
+            <label for="distance">Distance Layer (miles):</label>
+            <input type="range" id="distance" min="5" max="70" value="5" step="1">
+        </div>
+        <div class="control-group">
+            <label for="height">Height Scale:</label>
+            <input type="range" id="height" min="1" max="200" value="100">
+        </div>
+        <div class="control-group">
+            <label for="opacity">Layer Opacity:</label>
+            <input type="range" id="opacity" min="10" max="100" value="50">
+        </div>
+        <div id="data-bounds" style="margin-top: 10px; font-size: 12px;">
+            Data Bounds:<br>
+            Lat: <span id="lat-bounds"></span><br>
+            Lon: <span id="lon-bounds"></span><br>
+            Elev: <span id="elev-bounds"></span>
+        </div>
+    </div>
+    <div id="svg-container">
+        <svg id="mountain-svg"></svg>
+    </div>
+    <div id="map-container">
+        <div id="map-controls">
+            <button class="map-control-btn active" data-maptype="satellite">Satellite</button>
+            <button class="map-control-btn" data-maptype="roadmap">Street</button>
+            <button class="map-control-btn" id="draw-polygon">Draw Polygon</button>
+            <button class="map-control-btn" id="draw-circle">Draw Circle</button>
+            <button class="map-control-btn" id="clear">Clear Drawings</button>
+        </div>
+        <div class="distance-label">Current Layer: <span id="current-distance">20</span> miles</div>
+        <div id="map-frame" style="width: 100%; height: 100%;"></div>
+    </div>
+    <div id="tooltip" class="tooltip" style="display: none;"></div>
+    <div id="debug" style="display: none;"></div>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html> 

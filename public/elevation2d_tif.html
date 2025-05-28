@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>New Mexico Elevation Map (TIF Data)</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255,255,255,0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #legend {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>New Mexico Elevation Map</h3>
+        <p>Data from USGS TIF files</p>
+        <p>Points: <span id="pointCount">0</span></p>
+    </div>
+    <div id="legend">
+        <h4>Elevation (meters)</h4>
+        <div id="colorScale"></div>
+    </div>
+    <script>
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Color scale for elevation
+        const minElevation = 0;
+        const maxElevation = 4000;
+        const colorScale = [
+            [0, 0, 255],    // Blue (low)
+            [0, 255, 0],    // Green
+            [255, 255, 0],  // Yellow
+            [255, 0, 0]     // Red (high)
+        ];
+
+        function getColor(elevation) {
+            if (typeof elevation !== 'number' || isNaN(elevation)) {
+                console.warn('Invalid elevation value:', elevation);
+                return 'rgb(128, 128, 128)'; // Return gray for invalid values
+            }
+            
+            const t = (elevation - minElevation) / (maxElevation - minElevation);
+            const colorIndex = Math.floor(t * (colorScale.length - 1));
+            const nextColorIndex = Math.min(colorIndex + 1, colorScale.length - 1);
+            const t2 = (t * (colorScale.length - 1)) % 1;
+            
+            const color1 = colorScale[colorIndex];
+            const color2 = colorScale[nextColorIndex];
+            
+            if (!color1 || !color2) {
+                console.warn('Invalid color index:', { colorIndex, nextColorIndex, t });
+                return 'rgb(128, 128, 128)'; // Return gray for invalid colors
+            }
+            
+            return `rgb(
+                ${Math.round(color1[0] + (color2[0] - color1[0]) * t2)},
+                ${Math.round(color1[1] + (color2[1] - color1[1]) * t2)},
+                ${Math.round(color1[2] + (color2[2] - color1[2]) * t2)}
+            )`;
+        }
+
+        // Create legend
+        function createLegend() {
+            const legend = document.getElementById('colorScale');
+            const steps = 10;
+            for (let i = 0; i < steps; i++) {
+                const t = i / (steps - 1);
+                const elevation = minElevation + t * (maxElevation - minElevation);
+                const color = getColor(elevation);
+                const div = document.createElement('div');
+                div.style.backgroundColor = color;
+                div.style.height = '20px';
+                div.style.width = '30px';
+                div.style.display = 'inline-block';
+                div.style.margin = '0 2px';
+                div.title = `${Math.round(elevation)}m`;
+                legend.appendChild(div);
+            }
+        }
+        createLegend();
+
+        // Load and display data
+        fetch('elevation_tif.json')
+            .then(response => response.json())
+            .then(data => {
+                if (!Array.isArray(data)) {
+                    throw new Error('Data is not an array');
+                }
+                
+                console.log('Data loaded:', {
+                    length: data.length,
+                    firstPoint: data[0],
+                    lastPoint: data[data.length - 1]
+                });
+                
+                document.getElementById('pointCount').textContent = data.length;
+                
+                // Find bounds
+                const bounds = data.reduce((acc, point) => {
+                    if (!point || typeof point.lat !== 'number' || typeof point.lon !== 'number') {
+                        console.warn('Invalid point:', point);
+                        return acc;
+                    }
+                    return {
+                        minLat: Math.min(acc.minLat, point.lat),
+                        maxLat: Math.max(acc.maxLat, point.lat),
+                        minLon: Math.min(acc.minLon, point.lon),
+                        maxLon: Math.max(acc.maxLon, point.lon)
+                    };
+                }, {
+                    minLat: Infinity,
+                    maxLat: -Infinity,
+                    minLon: Infinity,
+                    maxLon: -Infinity
+                });
+
+                console.log('Bounds:', bounds);
+
+                // Draw points
+                data.forEach((point, index) => {
+                    if (point && typeof point.elevation === 'number' && typeof point.lat === 'number' && typeof point.lon === 'number') {
+                        const x = (point.lon - bounds.minLon) / (bounds.maxLon - bounds.minLon) * canvas.width;
+                        const y = (1 - (point.lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * canvas.height;
+                        ctx.fillStyle = getColor(point.elevation);
+                        ctx.fillRect(x, y, 2, 2);
+                    } else {
+                        console.warn('Invalid point at index', index, ':', point);
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error loading elevation data:', error);
+                document.getElementById('info').innerHTML += `<p style="color: red">Error: ${error.message}</p>`;
+            });
+    </script>
+</body>
+</html> 

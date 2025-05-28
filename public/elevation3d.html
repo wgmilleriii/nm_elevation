@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sandia Mountains 3D View</title>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: #f0f2f5; 
+            color: #333;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px;
+        }
+        h2 { 
+            text-align: center; 
+            color: #1a1a1a;
+            margin-bottom: 30px;
+        }
+        .view { 
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .view h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        #info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            font-size: 14px;
+            max-width: 300px;
+        }
+        #info h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            font-size: 14px;
+        }
+        #controls h4 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        .control-group {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+        }
+        input[type="range"] {
+            width: 200px;
+            margin: 5px 0;
+        }
+        #legend { 
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .legend-label { 
+            font-size: 12px;
+            color: #666;
+            margin: 0 5px;
+        }
+        #discrete-count {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Sandia Mountains 3D View</h2>
+        <div class="view">
+            <h3>Terrain View</h3>
+            <div id="discrete-count"></div>
+            <svg id="discrete-svg" width="600" height="600"></svg>
+        </div>
+        <div id="legend"></div>
+    </div>
+    <div id="info">
+        <h3>Sandia Mountains 3D View</h3>
+        <p>Viewing from: 35.099819°N, -106.513531°W</p>
+        <p>Looking: North-East</p>
+    </div>
+    <div id="controls">
+        <h4>View Controls</h4>
+        <div class="control-group">
+            <label>View Angle: <span id="viewAngleValue">45°</span></label>
+            <input type="range" id="viewAngle" min="0" max="90" value="45">
+        </div>
+        <div class="control-group">
+            <label>Focal Length: <span id="focalLengthValue">500</span></label>
+            <input type="range" id="focalLength" min="100" max="1000" value="500">
+        </div>
+        <div class="control-group">
+            <label>Zoom: <span id="zoomValue">1.0</span>x</label>
+            <input type="range" id="zoom" min="0.1" max="2" step="0.1" value="1">
+        </div>
+    </div>
+    <script>
+        // Global variables for view parameters
+        let viewAngle = 45;
+        let focalLength = 500;
+        let zoom = 1.0;
+
+        // Add event listeners for controls
+        document.getElementById('viewAngle').addEventListener('input', function(e) {
+            viewAngle = parseInt(e.target.value);
+            document.getElementById('viewAngleValue').textContent = viewAngle + '°';
+            updateView();
+        });
+
+        document.getElementById('focalLength').addEventListener('input', function(e) {
+            focalLength = parseInt(e.target.value);
+            document.getElementById('focalLengthValue').textContent = focalLength;
+            updateView();
+        });
+
+        document.getElementById('zoom').addEventListener('input', function(e) {
+            zoom = parseFloat(e.target.value);
+            document.getElementById('zoomValue').textContent = zoom.toFixed(1) + 'x';
+            updateView();
+        });
+
+        function updateView() {
+            if (window.currentPoints) {
+                drawDiscreteView(
+                    window.currentPoints,
+                    window.currentBounds.minLat,
+                    window.currentBounds.maxLat,
+                    window.currentBounds.minLon,
+                    window.currentBounds.maxLon,
+                    window.currentBounds.minElev,
+                    window.currentBounds.maxElev
+                );
+            }
+        }
+
+        // 3D to 2D projection functions
+        function project3Dto2D(point, focalLength = 500) {
+            // Apply perspective projection
+            const scaleFactor = focalLength / (focalLength + point.z);
+            return {
+                x: point.x * scaleFactor,
+                y: point.y * scaleFactor
+            };
+        }
+
+        function rotatePoint(point, rotation) {
+            // Pre-calculate sine and cosine for efficiency
+            const sx = Math.sin(rotation.x);
+            const cx = Math.cos(rotation.x);
+            const sy = Math.sin(rotation.y);
+            const cy = Math.cos(rotation.y);
+            const sz = Math.sin(rotation.z);
+            const cz = Math.cos(rotation.z);
+
+            // Rotate around X axis
+            let xy = cx * point.y - sx * point.z;
+            let xz = sx * point.y + cx * point.z;
+
+            // Rotate around Y axis
+            let yz = cy * xz - sy * point.x;
+            let yx = sy * xz + cy * point.x;
+
+            // Rotate around Z axis
+            let zx = cz * yx - sz * xy;
+            let zy = sz * yx + cz * xy;
+
+            return { x: zx, y: zy, z: yz };
+        }
+
+        // Color scale: blue (low) → green → yellow → red (high)
+        function getColor(elev, min, max) {
+            const t = (elev - min) / (max - min);
+            const r = Math.round(255 * Math.min(1, Math.max(0, (t - 0.5) * 2)));
+            const g = Math.round(255 * (1 - Math.abs(t - 0.5) * 2));
+            const b = Math.round(255 * Math.max(0, (0.5 - t) * 2));
+            return `rgb(${r},${g},${b})`;
+        }
+
+        function drawDiscreteView(points, minLat, maxLat, minLon, maxLon, minElev, maxElev) {
+            // Store current points and bounds for updates
+            window.currentPoints = points;
+            window.currentBounds = { minLat, maxLat, minLon, maxLon, minElev, maxElev };
+
+            const svg = document.getElementById('discrete-svg');
+            const width = svg.width.baseVal.value;
+            const height = svg.height.baseVal.value;
+            const margin = 40;
+
+            // Clear previous points
+            svg.innerHTML = '';
+
+            // Update point count
+            const uniqueLats = new Set(points.map(p => p.lat)).size;
+            const uniqueLons = new Set(points.map(p => p.lon)).size;
+            document.getElementById('discrete-count').textContent = 
+                `Showing ${points.length} total points (${uniqueLats} unique latitudes, ${uniqueLons} unique longitudes)`;
+
+            // Convert lat/lon to 3D coordinates with zoom
+            const points3D = points.map(p => ({
+                x: ((p.lon - minLon) / (maxLon - minLon) * width - width/2) * zoom,
+                y: -((p.elev - minElev) / (maxElev - minElev) * height) * zoom,
+                z: ((p.lat - minLat) / (maxLat - minLat) * height - height/2) * zoom
+            }));
+
+            // Apply rotation and projection
+            const rotation = { x: viewAngle * Math.PI/180, y: 0, z: 0 };
+            const projectedPoints = points3D.map(p => {
+                const rotated = rotatePoint(p, rotation);
+                return project3Dto2D(rotated, focalLength);
+            });
+
+            // Draw projected points
+            const size = 2 * zoom; // Scale point size with zoom
+            projectedPoints.forEach((p, i) => {
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', p.x + width/2 - size/2);
+                rect.setAttribute('y', p.y + height/2 - size/2);
+                rect.setAttribute('width', size);
+                rect.setAttribute('height', size);
+                rect.setAttribute('fill', getColor(points[i].elev, minElev, maxElev));
+                rect.setAttribute('stroke', 'none');
+                rect.setAttribute('opacity', '0.7');
+                svg.appendChild(rect);
+            });
+        }
+
+        function updateLegend(minElev, maxElev) {
+            const legend = document.getElementById('legend');
+            legend.innerHTML = '<b>Elevation Legend:</b> ';
+            for (let i = 0; i <= 10; i++) {
+                const elev = minElev + (i / 10) * (maxElev - minElev);
+                const color = getColor(elev, minElev, maxElev);
+                legend.innerHTML += `<span style="display:inline-block;width:20px;height:12px;background:${color};margin:0 2px;"></span>`;
+            }
+            legend.innerHTML += `<span class="legend-label">Low (${Math.round(minElev)}m)</span> → <span class="legend-label">High (${Math.round(maxElev)}m)</span>`;
+        }
+
+        // Load elevation data
+        console.log('Fetching elevation_cache.json...');
+        fetch('elevation_cache.json')
+            .then(response => {
+                if (!response.ok) {
+                    console.error('Failed to fetch elevation_cache.json:', response.status, response.statusText);
+                    throw new Error('Fetch failed');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Elevation data loaded. Number of points:', Object.keys(data).length);
+                const points = Object.entries(data).map(([key, elev]) => {
+                    const [lat, lon] = key.split(',').map(Number);
+                    return { lat, lon, elev };
+                });
+                if (points.length === 0) return;
+
+                const minLat = Math.min(...points.map(p => p.lat));
+                const maxLat = Math.max(...points.map(p => p.lat));
+                const minLon = Math.min(...points.map(p => p.lon));
+                const maxLon = Math.max(...points.map(p => p.lon));
+                const minElev = Math.min(...points.map(p => p.elev));
+                const maxElev = Math.max(...points.map(p => p.elev));
+
+                // Sort points by latitude and longitude for better visualization
+                points.sort((a, b) => {
+                    if (a.lat !== b.lat) return a.lat - b.lat;
+                    return a.lon - b.lon;
+                });
+
+                drawDiscreteView(points, minLat, maxLat, minLon, maxLon, minElev, maxElev);
+                updateLegend(minElev, maxElev);
+            })
+            .catch(err => {
+                console.error('Error loading elevation data:', err);
+            });
+    </script>
+</body>
+</html> 

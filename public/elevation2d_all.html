@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Full Elevation 2D Visualization</title>
+  <style>
+    body { font-family: sans-serif; background: #f8f8f8; }
+    .container { display: flex; flex-direction: column; align-items: center; }
+    .view { text-align: center; }
+    #legend { margin-top: 10px; }
+    .legend-label { font-size: 12px; }
+    .controls {
+      display: flex;
+      gap: 20px;
+      margin: 20px 0;
+      align-items: center;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .progress-container {
+      width: 100%;
+      max-width: 600px;
+      margin: 20px 0;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 20px;
+      background-color: #f0f0f0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .progress {
+      width: 0%;
+      height: 100%;
+      background-color: #4CAF50;
+      transition: width 0.3s ease;
+    }
+    .stats {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #666;
+    }
+    #discrete-svg {
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Sandia Mountains Full Elevation Visualization</h2>
+    
+    <div class="progress-container">
+      <div class="progress-bar">
+        <div class="progress" id="loading-progress"></div>
+      </div>
+      <div class="stats" id="loading-stats">
+        Loading data... <span id="points-loaded">0</span> points
+      </div>
+    </div>
+
+    <div class="view">
+      <h3>Elevation View</h3>
+      <div id="discrete-count"></div>
+      <svg id="discrete-svg" width="800" height="600"></svg>
+    </div>
+    <div id="legend"></div>
+  </div>
+
+  <script>
+    // Color scale: blue (low) → green → yellow → red (high)
+    function getColor(elev, min, max) {
+      const t = (elev - min) / (max - min);
+      const r = Math.round(255 * Math.min(1, Math.max(0, (t - 0.5) * 2)));
+      const g = Math.round(255 * (1 - Math.abs(t - 0.5) * 2));
+      const b = Math.round(255 * Math.max(0, (0.5 - t) * 2));
+      return `rgb(${r},${g},${b})`;
+    }
+
+    class OptimizedDataLoader {
+      constructor() {
+        this.points = new Map();
+        this.minLat = Infinity;
+        this.maxLat = -Infinity;
+        this.minLon = Infinity;
+        this.maxLon = -Infinity;
+        this.minElev = Infinity;
+        this.maxElev = -Infinity;
+        this.chunkSize = 10000; // Process 10k points at a time
+        this.currentChunk = 0;
+        this.totalChunks = 0;
+        this.isLoading = false;
+        this.svg = document.getElementById('discrete-svg');
+        this.width = this.svg.width.baseVal.value;
+        this.height = this.svg.height.baseVal.value;
+        this.margin = 40;
+        this.pointSize = 1; // Smaller points for better performance
+        this.renderedPoints = 0;
+      }
+
+      async loadData() {
+        try {
+          this.isLoading = true;
+          const response = await fetch('elevation_cache.json');
+          const data = await response.json();
+          
+          // Calculate total chunks
+          const entries = Object.entries(data);
+          this.totalChunks = Math.ceil(entries.length / this.chunkSize);
+          
+          // Process chunks
+          while (this.currentChunk < this.totalChunks && this.isLoading) {
+            const start = this.currentChunk * this.chunkSize;
+            const end = Math.min(start + this.chunkSize, entries.length);
+            const chunk = entries.slice(start, end);
+            
+            // Process chunk
+            this.processChunk(chunk);
+            
+            // Update progress
+            this.currentChunk++;
+            this.updateProgress();
+            
+            // Render points
+            this.renderPoints();
+            
+            // Allow UI to update
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
+        } catch (error) {
+          console.error('Error loading data:', error);
+        } finally {
+          this.isLoading = false;
+        }
+      }
+
+      processChunk(chunk) {
+        chunk.forEach(([key, elev]) => {
+          if (!this.points.has(key)) {
+            const [lat, lon] = key.split(',').map(Number);
+            this.points.set(key, { lat, lon, elev });
+            
+            // Update bounds
+            this.minLat = Math.min(this.minLat, lat);
+            this.maxLat = Math.max(this.maxLat, lat);
+            this.minLon = Math.min(this.minLon, lon);
+            this.maxLon = Math.max(this.maxLon, lon);
+            this.minElev = Math.min(this.minElev, elev);
+            this.maxElev = Math.max(this.maxElev, elev);
+          }
+        });
+      }
+
+      renderPoints() {
+        const fragment = document.createDocumentFragment();
+        const size = this.pointSize;
+        
+        // Calculate scales
+        const xScale = (lon) => this.margin + ((lon - this.minLon) / (this.maxLon - this.minLon)) * (this.width - 2 * this.margin);
+        const yScale = (lat) => this.height - this.margin - ((lat - this.minLat) / (this.maxLat - this.minLat)) * (this.height - 2 * this.margin);
+        
+        // Render new points
+        let count = 0;
+        this.points.forEach((point, key) => {
+          if (count >= this.renderedPoints) {
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('x', xScale(point.lon) - size/2);
+            rect.setAttribute('y', yScale(point.lat) - size/2);
+            rect.setAttribute('width', size);
+            rect.setAttribute('height', size);
+            rect.setAttribute('fill', getColor(point.elev, this.minElev, this.maxElev));
+            rect.setAttribute('stroke', 'none');
+            rect.setAttribute('opacity', '0.7');
+            fragment.appendChild(rect);
+          }
+          count++;
+        });
+        
+        // Append new points
+        this.svg.appendChild(fragment);
+        this.renderedPoints = count;
+        
+        // Update stats
+        document.getElementById('discrete-count').textContent = 
+          `Showing ${this.points.size} total points`;
+        document.getElementById('points-loaded').textContent = this.points.size;
+        
+        // Update legend
+        this.updateLegend();
+      }
+
+      updateProgress() {
+        const progress = (this.currentChunk / this.totalChunks) * 100;
+        document.getElementById('loading-progress').style.width = `${progress}%`;
+      }
+
+      updateLegend() {
+        const legend = document.getElementById('legend');
+        legend.innerHTML = '<b>Elevation Legend:</b> ';
+        for (let i = 0; i <= 10; i++) {
+          const elev = this.minElev + (i / 10) * (this.maxElev - this.minElev);
+          const color = getColor(elev, this.minElev, this.maxElev);
+          legend.innerHTML += `<span style="display:inline-block;width:20px;height:12px;background:${color};margin:0 2px;"></span>`;
+        }
+        legend.innerHTML += `<span class="legend-label">Low (${Math.round(this.minElev)}m)</span> → <span class="legend-label">High (${Math.round(this.maxElev)}m)</span>`;
+      }
+    }
+
+    // Initialize and start loading
+    const dataLoader = new OptimizedDataLoader();
+    dataLoader.loadData();
+  </script>
+</body>
+</html> 

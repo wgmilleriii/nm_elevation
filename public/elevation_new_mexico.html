@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>New Mexico 3D View</title>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: #f0f2f5; 
+            color: #333;
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px;
+        }
+        h2 { 
+            text-align: center; 
+            color: #1a1a1a;
+            margin-bottom: 30px;
+        }
+        .view { 
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .view h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        #info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            font-size: 14px;
+            max-width: 300px;
+        }
+        #info h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            font-size: 14px;
+        }
+        #controls h4 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        .control-group {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+        }
+        input[type="range"] {
+            width: 200px;
+            margin: 5px 0;
+        }
+        #legend { 
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .legend-label { 
+            font-size: 12px;
+            color: #666;
+            margin: 0 5px;
+        }
+        #discrete-count {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        #view-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        #view-toggle button {
+            padding: 8px 16px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        #view-toggle button:hover {
+            background: #45a049;
+        }
+        #view-toggle button.active {
+            background: #2E7D32;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>New Mexico 3D View</h2>
+        <div class="view">
+            <h3>Terrain View</h3>
+            <div id="discrete-count"></div>
+            <svg id="discrete-svg" width="1000" height="800"></svg>
+        </div>
+        <div id="legend"></div>
+    </div>
+    <div id="info">
+        <h3>New Mexico 3D View</h3>
+        <p>Viewing from: Top-down</p>
+        <p>Mode: <span id="viewMode">2D</span></p>
+    </div>
+    <div id="view-toggle">
+        <button id="view2d" class="active">2D View</button>
+        <button id="view3d">3D View</button>
+    </div>
+    <div id="controls" style="display: none;">
+        <h4>View Controls</h4>
+        <div class="control-group">
+            <label>View Angle: <span id="viewAngleValue">0°</span></label>
+            <input type="range" id="viewAngle" min="0" max="90" value="0">
+        </div>
+        <div class="control-group">
+            <label>Focal Length: <span id="focalLengthValue">500</span></label>
+            <input type="range" id="focalLength" min="100" max="1000" value="500">
+        </div>
+        <div class="control-group">
+            <label>Zoom: <span id="zoomValue">1.0</span>x</label>
+            <input type="range" id="zoom" min="0.1" max="2" step="0.1" value="1">
+        </div>
+    </div>
+    <script>
+        // Global variables
+        let viewAngle = 0;
+        let focalLength = 500;
+        let zoom = 1.0;
+        let is3D = false;
+        let currentPoints = null;
+        let currentBounds = null;
+
+        // View toggle handlers
+        document.getElementById('view2d').addEventListener('click', function() {
+            is3D = false;
+            document.getElementById('view2d').classList.add('active');
+            document.getElementById('view3d').classList.remove('active');
+            document.getElementById('controls').style.display = 'none';
+            document.getElementById('viewMode').textContent = '2D';
+            updateView();
+        });
+
+        document.getElementById('view3d').addEventListener('click', function() {
+            is3D = true;
+            document.getElementById('view2d').classList.remove('active');
+            document.getElementById('view3d').classList.add('active');
+            document.getElementById('controls').style.display = 'block';
+            document.getElementById('viewMode').textContent = '3D';
+            updateView();
+        });
+
+        // Control handlers
+        document.getElementById('viewAngle').addEventListener('input', function(e) {
+            viewAngle = parseInt(e.target.value);
+            document.getElementById('viewAngleValue').textContent = viewAngle + '°';
+            updateView();
+        });
+
+        document.getElementById('focalLength').addEventListener('input', function(e) {
+            focalLength = parseInt(e.target.value);
+            document.getElementById('focalLengthValue').textContent = focalLength;
+            updateView();
+        });
+
+        document.getElementById('zoom').addEventListener('input', function(e) {
+            zoom = parseFloat(e.target.value);
+            document.getElementById('zoomValue').textContent = zoom.toFixed(1) + 'x';
+            updateView();
+        });
+
+        // Color scale: blue (low) → green → yellow → red (high)
+        function getColor(elev, min, max) {
+            const t = (elev - min) / (max - min);
+            const r = Math.round(255 * Math.min(1, Math.max(0, (t - 0.5) * 2)));
+            const g = Math.round(255 * (1 - Math.abs(t - 0.5) * 2));
+            const b = Math.round(255 * Math.max(0, (0.5 - t) * 2));
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // 3D to 2D projection
+        function project3Dto2D(point, focalLength = 500) {
+            const scaleFactor = focalLength / (focalLength + point.z);
+            return {
+                x: point.x * scaleFactor,
+                y: point.y * scaleFactor
+            };
+        }
+
+        function rotatePoint(point, rotation) {
+            const sx = Math.sin(rotation.x);
+            const cx = Math.cos(rotation.x);
+            const sy = Math.sin(rotation.y);
+            const cy = Math.cos(rotation.y);
+            const sz = Math.sin(rotation.z);
+            const cz = Math.cos(rotation.z);
+
+            let xy = cx * point.y - sx * point.z;
+            let xz = sx * point.y + cx * point.z;
+            let yz = cy * xz - sy * point.x;
+            let yx = sy * xz + cy * point.x;
+            let zx = cz * yx - sz * xy;
+            let zy = sz * yx + cz * xy;
+
+            return { x: zx, y: zy, z: yz };
+        }
+
+        function drawView(points, minLat, maxLat, minLon, maxLon, minElev, maxElev) {
+            const svg = document.getElementById('discrete-svg');
+            const width = svg.width.baseVal.value;
+            const height = svg.height.baseVal.value;
+            const margin = 40;
+
+            svg.innerHTML = '';
+            document.getElementById('discrete-count').textContent = 
+                `Showing ${points.length} points`;
+
+            function xScale(lon) {
+                return margin + ((lon - minLon) / (maxLon - minLon)) * (width - 2 * margin);
+            }
+            function yScale(lat) {
+                return height - margin - ((lat - minLat) / (maxLat - minLat)) * (height - 2 * margin);
+            }
+
+            // Calculate center point for perspective
+            const centerX = width / 2;
+            const centerY = height / 2;
+
+            const size = 2;
+            points.forEach(p => {
+                let x, y;
+                if (is3D) {
+                    // Convert to 3D coordinates
+                    const point3D = {
+                        x: (p.lon - minLon) / (maxLon - minLon) * width - centerX,
+                        y: (p.lat - minLat) / (maxLat - minLat) * height - centerY,
+                        z: (p.elev - minElev) / (maxElev - minElev) * height
+                    };
+                    
+                    // Apply rotation (90 degrees is top-down, 0 degrees is side view)
+                    const rotation = {
+                        x: (90 - viewAngle) * Math.PI / 180,  // Inverted angle for more intuitive control
+                        y: 0,
+                        z: 0
+                    };
+                    const rotated = rotatePoint(point3D, rotation);
+                    
+                    // Project to 2D and center
+                    const projected = project3Dto2D(rotated, focalLength);
+                    x = projected.x * zoom + centerX;
+                    y = projected.y * zoom + centerY;
+                } else {
+                    x = xScale(p.lon);
+                    y = yScale(p.lat);
+                }
+
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', x - size/2);
+                rect.setAttribute('y', y - size/2);
+                rect.setAttribute('width', size);
+                rect.setAttribute('height', size);
+                rect.setAttribute('fill', getColor(p.elev, minElev, maxElev));
+                rect.setAttribute('stroke', 'none');
+                rect.setAttribute('opacity', '0.7');
+                svg.appendChild(rect);
+            });
+        }
+
+        function updateLegend(minElev, maxElev) {
+            const legend = document.getElementById('legend');
+            legend.innerHTML = '<b>Elevation Legend:</b> ';
+            for (let i = 0; i <= 10; i++) {
+                const elev = minElev + (i / 10) * (maxElev - minElev);
+                const color = getColor(elev, minElev, maxElev);
+                legend.innerHTML += `<span style="display:inline-block;width:20px;height:12px;background:${color};margin:0 2px;"></span>`;
+            }
+            legend.innerHTML += `<span class="legend-label">Low (${Math.round(minElev)}m)</span> → <span class="legend-label">High (${Math.round(maxElev)}m)</span>`;
+        }
+
+        function updateView() {
+            if (currentPoints && currentBounds) {
+                drawView(
+                    currentPoints,
+                    currentBounds.minLat,
+                    currentBounds.maxLat,
+                    currentBounds.minLon,
+                    currentBounds.maxLon,
+                    currentBounds.minElev,
+                    currentBounds.maxElev
+                );
+            }
+        }
+
+        // Load and process data
+        fetch('elevation_cache_reduced.json')
+            .then(res => res.json())
+            .then(data => {
+                const points = Object.entries(data).map(([key, elev]) => {
+                    const [lat, lon] = key.split(',').map(Number);
+                    return { lat, lon, elev };
+                });
+
+                if (points.length === 0) return;
+
+                const minLat = Math.min(...points.map(p => p.lat));
+                const maxLat = Math.max(...points.map(p => p.lat));
+                const minLon = Math.min(...points.map(p => p.lon));
+                const maxLon = Math.max(...points.map(p => p.lon));
+                const minElev = Math.min(...points.map(p => p.elev));
+                const maxElev = Math.max(...points.map(p => p.elev));
+
+                points.sort((a, b) => {
+                    if (a.lat !== b.lat) return a.lat - b.lat;
+                    return a.lon - b.lon;
+                });
+
+                currentPoints = points;
+                currentBounds = { minLat, maxLat, minLon, maxLon, minElev, maxElev };
+
+                drawView(points, minLat, maxLat, minLon, maxLon, minElev, maxElev);
+                updateLegend(minElev, maxElev);
+            })
+            .catch(error => {
+                console.error('Error loading elevation data:', error);
+            });
+    </script>
+</body>
+</html> 

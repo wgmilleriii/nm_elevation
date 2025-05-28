@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Santa Fe Elevation Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        #container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #visualization {
+            width: 100%;
+            height: 800px;
+            border: 1px solid #ddd;
+            background: white;
+        }
+        .point {
+            transition: r 0.2s;
+        }
+        .point:hover {
+            r: 4;
+        }
+        #stats {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .legend {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .legend-gradient {
+            width: 200px;
+            height: 20px;
+            margin-right: 10px;
+            background: linear-gradient(to right, #0000ff, #ffff00);
+        }
+        .nav {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .nav a {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .nav a:hover {
+            background: #45a049;
+        }
+        #controls {
+            margin: 20px 0;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        #controls label {
+            margin-right: 10px;
+        }
+        #controls input {
+            width: 80px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div class="nav">
+            <a href="/">← Back to New Mexico Map</a>
+        </div>
+        <h1>Santa Fe Area Elevation Map</h1>
+        
+        <div id="controls">
+            <label>Radius (km):
+                <input type="number" id="radius" value="20" min="1" max="50" step="1">
+            </label>
+            <label>Center:
+                <select id="center">
+                    <option value="35.6870,-105.9378">Santa Fe Plaza</option>
+                    <option value="35.7850,-105.9014">Santa Fe Ski Basin</option>
+                    <option value="35.8425,-106.2922">Los Alamos</option>
+                </select>
+            </label>
+            <button onclick="updateVisualization()">Update</button>
+        </div>
+
+        <div class="legend">
+            <div class="legend-gradient"></div>
+            <span>Low → High Elevation</span>
+        </div>
+        <svg id="visualization" preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="stats"></div>
+    </div>
+
+    <script>
+        async function fetchSantaFeData() {
+            const radius = document.getElementById('radius').value;
+            const [lat, lon] = document.getElementById('center').value.split(',');
+            const response = await fetch(`/api/santa-fe-elevation?lat=${lat}&lon=${lon}&radius=${radius}`);
+            return response.json();
+        }
+
+        function getElevationColor(elevation, minElevation, maxElevation) {
+            const normalizedElevation = (elevation - minElevation) / (maxElevation - minElevation);
+            const r = Math.round(normalizedElevation * 255);
+            const g = Math.round(normalizedElevation * 255);
+            const b = Math.round(255 * (1 - normalizedElevation));
+            return `rgb(${r},${g},${b})`;
+        }
+
+        async function visualizeData() {
+            const data = await fetchSantaFeData();
+            const svg = document.getElementById('visualization');
+            
+            // Clear existing content
+            svg.innerHTML = '';
+            
+            // Calculate bounds
+            const points = data.points;
+            const minLat = Math.min(...points.map(p => p.latitude));
+            const maxLat = Math.max(...points.map(p => p.latitude));
+            const minLon = Math.min(...points.map(p => p.longitude));
+            const maxLon = Math.max(...points.map(p => p.longitude));
+            
+            // Get SVG dimensions
+            const svgRect = svg.getBoundingClientRect();
+            const width = svgRect.width;
+            const height = svgRect.height;
+            
+            // Add padding
+            const padding = 20;
+            const xScale = (width - 2 * padding) / (maxLon - minLon);
+            const yScale = (height - 2 * padding) / (maxLat - minLat);
+            
+            // Plot points
+            points.forEach(point => {
+                const x = (point.longitude - minLon) * xScale + padding;
+                const y = height - ((point.latitude - minLat) * yScale + padding);
+                
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute("cx", x);
+                circle.setAttribute("cy", y);
+                circle.setAttribute("r", 3); // Slightly larger points for detail
+                circle.setAttribute("fill", getElevationColor(
+                    point.elevation,
+                    data.stats.min_elevation,
+                    data.stats.max_elevation
+                ));
+                circle.classList.add("point");
+                
+                // Add tooltip
+                circle.setAttribute("data-elevation", point.elevation);
+                circle.addEventListener("mouseover", (e) => {
+                    const tooltip = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    tooltip.textContent = `${point.elevation.toFixed(1)}m`;
+                    tooltip.setAttribute("x", x + 5);
+                    tooltip.setAttribute("y", y - 5);
+                    tooltip.setAttribute("class", "tooltip");
+                    svg.appendChild(tooltip);
+                });
+                circle.addEventListener("mouseout", () => {
+                    const tooltip = svg.querySelector(".tooltip");
+                    if (tooltip) tooltip.remove();
+                });
+                
+                svg.appendChild(circle);
+            });
+            
+            // Update stats
+            const statsDiv = document.getElementById('stats');
+            statsDiv.innerHTML = `
+                <h3>Statistics</h3>
+                <p>Total Points: ${data.stats.point_count}</p>
+                <p>Elevation Range: ${data.stats.min_elevation.toFixed(1)}m to ${data.stats.max_elevation.toFixed(1)}m</p>
+                <p>Average Elevation: ${data.stats.avg_elevation.toFixed(1)}m</p>
+                <p>Area Covered: ${data.stats.area_km2.toFixed(1)} km²</p>
+            `;
+        }
+
+        function updateVisualization() {
+            visualizeData();
+        }
+
+        // Initial visualization
+        visualizeData();
+    </script>
+</body>
+</html> 

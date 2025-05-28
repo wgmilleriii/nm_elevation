@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Drawing POC</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+        .drawing-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+        button {
+            margin: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        #debug {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="drawing-controls">
+        <button id="draw-polygon">Draw Polygon</button>
+        <button id="draw-circle">Draw Circle</button>
+        <button id="clear">Clear All</button>
+    </div>
+    <div id="debug"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Debug logging
+        function log(message) {
+            const debug = document.getElementById('debug');
+            const entry = document.createElement('div');
+            entry.textContent = `${new Date().toISOString().split('T')[1].split('.')[0]} - ${message}`;
+            debug.appendChild(entry);
+            debug.scrollTop = debug.scrollHeight;
+            console.log(message);
+        }
+
+        // Initialize map
+        log('Initializing map...');
+        const map = L.map('map', {
+            zoomControl: true,
+            attributionControl: true
+        }).setView([34.5199, -105.8701], 6);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        log('Map initialized');
+
+        // Drawing state
+        let isDrawing = false;
+        let currentShape = null;
+        let points = [];
+        let shapes = [];
+
+        // Drawing controls
+        document.getElementById('draw-polygon').addEventListener('click', () => {
+            log('Starting polygon drawing mode');
+            isDrawing = true;
+            points = [];
+            map.once('click', startDrawing);
+        });
+
+        document.getElementById('draw-circle').addEventListener('click', () => {
+            log('Starting circle drawing mode');
+            isDrawing = true;
+            points = [];
+            map.once('click', startCircle);
+        });
+
+        document.getElementById('clear').addEventListener('click', () => {
+            log('Clearing all shapes');
+            shapes.forEach(shape => {
+                if (shape) {
+                    map.removeLayer(shape);
+                }
+            });
+            shapes = [];
+            if (currentShape) {
+                map.removeLayer(currentShape);
+                currentShape = null;
+            }
+            points = [];
+            isDrawing = false;
+        });
+
+        function startDrawing(e) {
+            if (!isDrawing) {
+                log('Drawing mode not active');
+                return;
+            }
+            
+            log(`Adding point at ${e.latlng.lat}, ${e.latlng.lng}`);
+            points.push([e.latlng.lat, e.latlng.lng]);
+            
+            if (currentShape) {
+                map.removeLayer(currentShape);
+            }
+
+            currentShape = L.polygon(points, {
+                color: 'red',
+                weight: 3,
+                fillOpacity: 0.2,
+                fillColor: 'red'
+            }).addTo(map);
+
+            log(`Created polygon with ${points.length} points`);
+
+            map.on('click', continueDrawing);
+            map.once('dblclick', finishDrawing);
+        }
+
+        function continueDrawing(e) {
+            if (!isDrawing) {
+                log('Drawing mode not active');
+                return;
+            }
+            
+            log(`Adding point at ${e.latlng.lat}, ${e.latlng.lng}`);
+            points.push([e.latlng.lat, e.latlng.lng]);
+            
+            if (currentShape) {
+                map.removeLayer(currentShape);
+            }
+
+            currentShape = L.polygon(points, {
+                color: 'red',
+                weight: 3,
+                fillOpacity: 0.2,
+                fillColor: 'red'
+            }).addTo(map);
+
+            log(`Updated polygon with ${points.length} points`);
+        }
+
+        function finishDrawing() {
+            log('Finishing polygon drawing');
+            isDrawing = false;
+            map.off('click', continueDrawing);
+            
+            if (currentShape) {
+                shapes.push(currentShape);
+                currentShape = null;
+            }
+            
+            points = [];
+        }
+
+        function startCircle(e) {
+            if (!isDrawing) {
+                log('Drawing mode not active');
+                return;
+            }
+            
+            const center = e.latlng;
+            log(`Starting circle at ${center.lat}, ${center.lng}`);
+            
+            if (currentShape) {
+                map.removeLayer(currentShape);
+            }
+
+            currentShape = L.circle(center, {
+                radius: 0,
+                color: 'blue',
+                weight: 3,
+                fillOpacity: 0.2,
+                fillColor: 'blue'
+            }).addTo(map);
+
+            map.on('mousemove', (e) => {
+                const radius = center.distanceTo(e.latlng);
+                currentShape.setRadius(radius);
+            });
+
+            map.once('click', () => {
+                log('Finishing circle drawing');
+                isDrawing = false;
+                map.off('mousemove');
+                
+                if (currentShape) {
+                    shapes.push(currentShape);
+                    currentShape = null;
+                }
+            });
+        }
+
+        // Add initial marker to verify map is working
+        const testMarker = L.marker([34.5199, -105.8701]).addTo(map);
+        testMarker.bindPopup('Test Marker').openPopup();
+        log('Added test marker');
+    </script>
+</body>
+</html> 
