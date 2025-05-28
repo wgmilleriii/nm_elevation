@@ -24,7 +24,6 @@
             height: 800px;
             border: 1px solid #ddd;
             background: white;
-            cursor: crosshair;
         }
         .point {
             transition: r 0.2s;
@@ -49,58 +48,25 @@
             margin-right: 10px;
             background: linear-gradient(to right, #0000ff, #ffff00);
         }
-        .nav {
-            margin-bottom: 20px;
-            padding: 10px;
-            background: #f8f8f8;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .nav a, .nav button {
-            display: inline-block;
+        .resolution-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
             padding: 8px 16px;
             background: #4CAF50;
             color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            transition: background-color 0.3s;
             border: none;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 1em;
         }
-        .nav a:hover, .nav button:hover {
+        .resolution-toggle:hover {
             background: #45a049;
-        }
-        .nav button:disabled {
-            background: #cccccc;
-            cursor: not-allowed;
-        }
-        .selection-rect {
-            fill: rgba(76, 175, 80, 0.2);
-            stroke: #4CAF50;
-            stroke-width: 2;
-            pointer-events: none;
-        }
-        #enhance-button {
-            display: none;
         }
     </style>
 </head>
 <body>
     <div id="container">
-        <div class="nav">
-            <div>
-                <a href="/santa-fe.html">View Santa Fe Area</a>
-                <a href="#" onclick="showRegion(0,1)" style="margin-left: 10px;">View Region 0,1</a>
-        </div>
-            <div>
-                <button id="enhance-button" onclick="enhanceSelectedRegion()">Enhance Selected Region</button>
-            </div>
-        </div>
-        <h1>New Mexico Elevation Map</h1>
-        <p>Click and drag to select a region for enhancement. The selected region will be scanned at 10x resolution.</p>
+        <button id="resolution-toggle" class="resolution-toggle" onclick="toggleResolution()">Switch to High Resolution</button>
         <div class="legend">
             <div class="legend-gradient"></div>
             <span>Low → High Elevation</span>
@@ -110,402 +76,76 @@
     </div>
     
     <script>
-        let selectionRect = null;
-        let startPoint = null;
-        let selectedBounds = null;
-        let svgPoint = null;
+        let currentResolution = 'low';
 
         async function fetchData() {
-            const response = await fetch('/api/elevation-data');
+            const response = await fetch(`/api/elevation-data${currentResolution === 'high' ? '?resolution=high' : ''}`);
             return response.json();
         }
 
         function getElevationColor(elevation, minElevation, maxElevation) {
             if (elevation === null) {
-                return 'rgba(255, 255, 255, 0.5)';  // 50% transparent white
+                return 'rgba(255, 255, 255, 0.5)';
             }
             const normalizedElevation = (elevation - minElevation) / (maxElevation - minElevation);
-            // Interpolate between blue (low) and yellow (high)
             const r = Math.round(normalizedElevation * 255);
             const g = Math.round(normalizedElevation * 255);
             const b = Math.round(255 * (1 - normalizedElevation));
             return `rgb(${r},${g},${b})`;
         }
 
-        function initializeSelection(svg) {
-            svg.addEventListener('mousedown', startSelection);
-            svg.addEventListener('mousemove', updateSelection);
-            svg.addEventListener('mouseup', endSelection);
-            
-            // Create SVG point for coordinate transforms
-            svgPoint = svg.createSVGPoint();
-        }
-
-        function getMousePosition(event, svg) {
-            svgPoint.x = event.clientX;
-            svgPoint.y = event.clientY;
-            const point = svgPoint.matrixTransform(svg.getScreenCTM().inverse());
-            return point;
-        }
-
-        function startSelection(event) {
-            const svg = event.target.closest('svg');
-            const point = getMousePosition(event, svg);
-            
-            // Remove existing selection rectangle if any
-            if (selectionRect) {
-                selectionRect.remove();
-                selectionRect = null;
-                selectedBounds = null;
-                document.getElementById('enhance-button').style.display = 'none';
-            }
-            
-            startPoint = point;
-            
-            selectionRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-            selectionRect.setAttribute('class', 'selection-rect');
-            selectionRect.setAttribute('x', point.x);
-            selectionRect.setAttribute('y', point.y);
-            svg.appendChild(selectionRect);
-        }
-
-        function updateSelection(event) {
-            if (!startPoint || !selectionRect) return;
-            
-            const svg = event.target.closest('svg');
-            const point = getMousePosition(event, svg);
-            
-            const x = Math.min(startPoint.x, point.x);
-            const y = Math.min(startPoint.y, point.y);
-            const width = Math.abs(point.x - startPoint.x);
-            const height = Math.abs(point.y - startPoint.y);
-            
-            selectionRect.setAttribute('x', x);
-            selectionRect.setAttribute('y', y);
-            selectionRect.setAttribute('width', width);
-            selectionRect.setAttribute('height', height);
-        }
-
-        function endSelection(event) {
-            if (!startPoint || !selectionRect) return;
-            
-            const svg = event.target.closest('svg');
-            const point = getMousePosition(event, svg);
-            
-            // Convert selection coordinates to lat/lon
-            const svgRect = svg.getBoundingClientRect();
-            const width = svgRect.width;
-            const height = svgRect.height;
-            const padding = 20;
-            
-            const x1 = Math.min(startPoint.x, point.x);
-            const x2 = Math.max(startPoint.x, point.x);
-            const y1 = Math.min(startPoint.y, point.y);
-            const y2 = Math.max(startPoint.y, point.y);
-            
-            // Get current bounds
-            const points = window.currentPoints || [];
-            let minLat = points[0].latitude;
-            let maxLat = points[0].latitude;
-            let minLon = points[0].longitude;
-            let maxLon = points[0].longitude;
-            
-            for (let i = 1; i < points.length; i++) {
-                const point = points[i];
-                if (point.latitude < minLat) minLat = point.latitude;
-                if (point.latitude > maxLat) maxLat = point.latitude;
-                if (point.longitude < minLon) minLon = point.longitude;
-                if (point.longitude > maxLon) maxLon = point.longitude;
-            }
-            
-            // Convert to lat/lon
-            const xScale = (maxLon - minLon) / (width - 2 * padding);
-            const yScale = (maxLat - minLat) / (height - 2 * padding);
-            
-            selectedBounds = {
-                minLon: minLon + (x1 - padding) * xScale,
-                maxLon: minLon + (x2 - padding) * xScale,
-                // Note: Y coordinates are inverted in SVG
-                maxLat: maxLat - (y1 - padding) * yScale,
-                minLat: maxLat - (y2 - padding) * yScale
-            };
-            
-            // Show enhance button
-            document.getElementById('enhance-button').style.display = 'inline-block';
-            
-            startPoint = null;
-        }
-
-        async function enhanceSelectedRegion() {
-            if (!selectedBounds) return;
-            
-            const button = document.getElementById('enhance-button');
-            button.disabled = true;
-            button.textContent = 'Starting Enhancement...';
-            
-            try {
-                // Ensure all values are numbers
-                const bounds = {
-                    minLat: parseFloat(selectedBounds.minLat),
-                    maxLat: parseFloat(selectedBounds.maxLat),
-                    minLon: parseFloat(selectedBounds.minLon),
-                    maxLon: parseFloat(selectedBounds.maxLon)
-                };
-
-                const response = await fetch('/api/enhance-region', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(bounds)
-                });
-                
-                const result = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(result.error || 'Failed to start enhancement');
-                }
-                
-                button.textContent = 'Enhancement Started!';
-                
-                // Show status
-                const statsDiv = document.getElementById('stats');
-                statsDiv.innerHTML += `
-                    <div style="margin-top: 20px; padding: 10px; background: #e8f5e9; border-radius: 4px;">
-                        <h3>Enhancement Status</h3>
-                        <p>Region: ${bounds.minLat.toFixed(4)}°N to ${bounds.maxLat.toFixed(4)}°N, 
-                           ${bounds.minLon.toFixed(4)}°W to ${bounds.maxLon.toFixed(4)}°W</p>
-                        <p>Enhancement process has started. This may take several minutes to complete.</p>
-                        <p>You can continue using the map while the enhancement runs in the background.</p>
-                    </div>
-                `;
-            } catch (error) {
-                console.error('Enhancement error:', error);
-                button.textContent = 'Enhancement Failed';
-                button.style.background = '#f44336';
-                
-                // Show error details
-                const statsDiv = document.getElementById('stats');
-                statsDiv.innerHTML += `
-                    <div style="margin-top: 20px; padding: 10px; background: #ffebee; border-radius: 4px;">
-                        <h3>Enhancement Error</h3>
-                        <p>Failed to start enhancement: ${error.message}</p>
-                    </div>
-                `;
-            } finally {
-                button.disabled = false;
-            }
+        async function toggleResolution() {
+            const button = document.getElementById('resolution-toggle');
+            currentResolution = currentResolution === 'low' ? 'high' : 'low';
+            button.textContent = `Switch to ${currentResolution === 'low' ? 'High' : 'Low'} Resolution`;
+            await visualizeData();
         }
 
         async function visualizeData() {
-            const data = await fetchData();
-            window.currentPoints = data.points; // Store points for coordinate conversion
+            const { points, stats } = await fetchData();
             const svg = document.getElementById('visualization');
             
-            // Clear existing content
+            // Clear existing points
             svg.innerHTML = '';
             
-            // Initialize selection handling
-            initializeSelection(svg);
-            
-            // Calculate bounds
-            const points = data.points;
-            let minLat = points[0].latitude;
-            let maxLat = points[0].latitude;
-            let minLon = points[0].longitude;
-            let maxLon = points[0].longitude;
-            
-            for (let i = 1; i < points.length; i++) {
-                const point = points[i];
-                if (point.latitude < minLat) minLat = point.latitude;
-                if (point.latitude > maxLat) maxLat = point.latitude;
-                if (point.longitude < minLon) minLon = point.longitude;
-                if (point.longitude > maxLon) maxLon = point.longitude;
-            }
-            
-            // Get SVG dimensions
-            const svgRect = svg.getBoundingClientRect();
-            const width = svgRect.width;
-            const height = svgRect.height;
-            
-            // Add padding
+            // Calculate dimensions
+            const width = svg.clientWidth;
+            const height = svg.clientHeight;
             const padding = 20;
-            const xScale = (width - 2 * padding) / (maxLon - minLon);
-            const yScale = (height - 2 * padding) / (maxLat - minLat);
             
-            // Plot points
+            // Find bounds
+            const minLat = 31.33;
+            const maxLat = 37.00;
+            const minLon = -109.05;
+            const maxLon = -103.00;
+            
+            // Create points
             points.forEach(point => {
-                const x = (point.longitude - minLon) * xScale + padding;
-                const y = height - ((point.latitude - minLat) * yScale + padding);
+                const x = ((point.longitude - minLon) / (maxLon - minLon)) * (width - 2 * padding) + padding;
+                const y = height - (((point.latitude - minLat) / (maxLat - minLat)) * (height - 2 * padding) + padding);
                 
                 const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                circle.setAttribute("cx", x);
-                circle.setAttribute("cy", y);
-                circle.setAttribute("r", 2);
-                
-                if (point.elevation === null) {
-                    // Style for NULL elevation points
-                    circle.setAttribute("fill", "rgba(255, 255, 255, 0.5)");
-                    circle.setAttribute("stroke", "#808080");  // Grey outline
-                    circle.setAttribute("stroke-width", "1");
-                } else {
-                    circle.setAttribute("fill", getElevationColor(
-                        point.elevation,
-                        data.stats.min_elevation,
-                        data.stats.max_elevation
-                    ));
-                }
-                
-                circle.classList.add("point");
+                circle.setAttribute('cx', x);
+                circle.setAttribute('cy', y);
+                circle.setAttribute('r', 2);
+                circle.setAttribute('fill', getElevationColor(point.elevation, stats.min_elevation, stats.max_elevation));
+                circle.setAttribute('class', 'point');
                 
                 // Add tooltip
-                circle.setAttribute("data-elevation", point.elevation !== null ? point.elevation : "No data");
-                circle.addEventListener("mouseover", (e) => {
-                    const tooltip = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                    tooltip.textContent = point.elevation !== null ? 
-                        `${point.elevation.toFixed(1)}m` : 
-                        "Pending elevation data";
-                    tooltip.setAttribute("x", x + 5);
-                    tooltip.setAttribute("y", y - 5);
-                    tooltip.setAttribute("class", "tooltip");
-                    svg.appendChild(tooltip);
-                });
-                circle.addEventListener("mouseout", () => {
-                    const tooltip = svg.querySelector(".tooltip");
-                    if (tooltip) tooltip.remove();
-                });
+                circle.setAttribute('title', `Lat: ${point.latitude.toFixed(4)}, Lon: ${point.longitude.toFixed(4)}\nElevation: ${point.elevation.toFixed(1)}m`);
                 
                 svg.appendChild(circle);
             });
             
             // Update stats
-            const statsDiv = document.getElementById('stats');
-            statsDiv.innerHTML = `
-                <h3>Statistics</h3>
-                <p>Total Points: ${data.stats.point_count}</p>
-                <p>Elevation Range: ${data.stats.min_elevation.toFixed(1)}m to ${data.stats.max_elevation.toFixed(1)}m</p>
-                <p>Latitude Range: ${minLat.toFixed(4)}° to ${maxLat.toFixed(4)}°</p>
-                <p>Longitude Range: ${minLon.toFixed(4)}° to ${maxLon.toFixed(4)}°</p>
+            document.getElementById('stats').innerHTML = `
+                Points: ${stats.point_count.toLocaleString()}<br>
+                Elevation Range: ${stats.min_elevation.toFixed(1)}m to ${stats.max_elevation.toFixed(1)}m<br>
+                Resolution: ${stats.resolution}
             `;
         }
 
-        async function showRegion(x, y) {
-            const minLat = 31.33 + (y * (37.00 - 31.33) / 10);
-            const maxLat = minLat + (37.00 - 31.33) / 10;
-            const minLon = -109.05 + (x * (-103.00 - -109.05) / 10);
-            const maxLon = minLon + (-103.00 - -109.05) / 10;
-            
-            const response = await fetch('/api/elevation-data');
-            const data = await response.json();
-            
-            // Filter points for this region
-            const regionPoints = data.points.filter(p => 
-                p.latitude >= minLat && p.latitude <= maxLat &&
-                p.longitude >= minLon && p.longitude <= maxLon
-            );
-            
-            // Update visualization with just these points
-            const stats = {
-                min_elevation: regionPoints[0].elevation,
-                max_elevation: regionPoints[0].elevation,
-                point_count: regionPoints.length
-            };
-            
-            for (let i = 1; i < regionPoints.length; i++) {
-                const elevation = regionPoints[i].elevation;
-                if (elevation < stats.min_elevation) stats.min_elevation = elevation;
-                if (elevation > stats.max_elevation) stats.max_elevation = elevation;
-            }
-            
-            visualizePoints(regionPoints, stats);
-            
-            // Update stats display
-            const statsDiv = document.getElementById('stats');
-            statsDiv.innerHTML = `
-                <h3>Region 0,1 Statistics</h3>
-                <p>Total Points: ${stats.point_count}</p>
-                <p>Elevation Range: ${stats.min_elevation.toFixed(1)}m to ${stats.max_elevation.toFixed(1)}m</p>
-                <p>Region Bounds: ${minLat.toFixed(4)}°N to ${maxLat.toFixed(4)}°N, ${minLon.toFixed(4)}°W to ${maxLon.toFixed(4)}°W</p>
-            `;
-        }
-
-        function visualizePoints(points, stats) {
-            const svg = document.getElementById('visualization');
-            
-            // Clear existing content
-            svg.innerHTML = '';
-            
-            // Calculate bounds
-            let minLat = points[0].latitude;
-            let maxLat = points[0].latitude;
-            let minLon = points[0].longitude;
-            let maxLon = points[0].longitude;
-            
-            for (let i = 1; i < points.length; i++) {
-                const point = points[i];
-                if (point.latitude < minLat) minLat = point.latitude;
-                if (point.latitude > maxLat) maxLat = point.latitude;
-                if (point.longitude < minLon) minLon = point.longitude;
-                if (point.longitude > maxLon) maxLon = point.longitude;
-            }
-            
-            // Get SVG dimensions
-            const svgRect = svg.getBoundingClientRect();
-            const width = svgRect.width;
-            const height = svgRect.height;
-            
-            // Add padding
-            const padding = 20;
-            const xScale = (width - 2 * padding) / (maxLon - minLon);
-            const yScale = (height - 2 * padding) / (maxLat - minLat);
-            
-            // Plot points
-            points.forEach(point => {
-                const x = (point.longitude - minLon) * xScale + padding;
-                const y = height - ((point.latitude - minLat) * yScale + padding);
-                
-                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                circle.setAttribute("cx", x);
-                circle.setAttribute("cy", y);
-                circle.setAttribute("r", 2);
-                
-                if (point.elevation === null) {
-                    // Style for NULL elevation points
-                    circle.setAttribute("fill", "rgba(255, 255, 255, 0.5)");
-                    circle.setAttribute("stroke", "#808080");  // Grey outline
-                    circle.setAttribute("stroke-width", "1");
-                } else {
-                    circle.setAttribute("fill", getElevationColor(
-                        point.elevation,
-                        stats.min_elevation,
-                        stats.max_elevation
-                    ));
-                }
-                
-                circle.classList.add("point");
-                
-                // Add tooltip
-                circle.setAttribute("data-elevation", point.elevation !== null ? point.elevation : "No data");
-                circle.addEventListener("mouseover", (e) => {
-                    const tooltip = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                    tooltip.textContent = point.elevation !== null ? 
-                        `${point.elevation.toFixed(1)}m` : 
-                        "Pending elevation data";
-                    tooltip.setAttribute("x", x + 5);
-                    tooltip.setAttribute("y", y - 5);
-                    tooltip.setAttribute("class", "tooltip");
-                    svg.appendChild(tooltip);
-                });
-                circle.addEventListener("mouseout", () => {
-                    const tooltip = svg.querySelector(".tooltip");
-                    if (tooltip) tooltip.remove();
-                });
-                
-                svg.appendChild(circle);
-            });
-        }
-
-        // Start visualization when page loads
+        // Initialize visualization
         visualizeData();
     </script>
 </body>
