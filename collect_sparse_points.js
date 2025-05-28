@@ -11,6 +11,20 @@ const __dirname = path.dirname(__filename);
 // Configuration
 const DEFAULT_BATCH_SIZE = 25;  // Default batch size
 const MAX_BATCH_SIZE = 100;  // Maximum batch size we'll ever use
+
+// Collection direction configuration
+const COLLECTION_DIRECTIONS = {
+    SOUTHWEST_TO_NORTHEAST: 'sw_to_ne',
+    NORTHEAST_TO_SOUTHWEST: 'ne_to_sw'
+};
+
+// Get direction from command line argument or environment variable
+const collectionDirection = process.argv.includes('--direction=ne_to_sw') 
+    ? COLLECTION_DIRECTIONS.NORTHEAST_TO_SOUTHWEST 
+    : process.argv.includes('--direction=sw_to_ne')
+        ? COLLECTION_DIRECTIONS.SOUTHWEST_TO_NORTHEAST
+        : process.env.COLLECTION_DIRECTION || COLLECTION_DIRECTIONS.SOUTHWEST_TO_NORTHEAST;
+
 const API_BATCH_SIZES = {
     'srtm30m': 100,     // OpenTopoData limit
     'aster30m': 100,    // OpenTopoData limit
@@ -20,7 +34,9 @@ const API_BATCH_SIZES = {
 const DELAY_MS = 2000;  // 2 second delay between batches
 const REQUEST_TIMEOUT = 15000;  // 15 second timeout
 const POINTS_TO_COLLECT = 1000;  // Reduced to 1k points for lower resolution
-const DB_FILE = 'mountains.db';
+
+// Use different DB files based on direction
+const DB_FILE = process.argv.includes('--direction=ne_to_sw') ? 'mountains_ne_sw.db' : 'mountains.db';
 
 // New Mexico bounds
 const NM_BOUNDS = {
@@ -137,14 +153,24 @@ const API_STATUS = {
 // Add last successful API tracking
 let lastSuccessfulApiIndex = -1;
 
-function calculateGridPoints(bounds, gridSize) {
+// Modify calculateGridPoints to handle different directions
+function calculateGridPoints(bounds, gridSize, direction = collectionDirection) {
     const points = [];
     const latStep = (bounds.maxLat - bounds.minLat) / gridSize;
     const lonStep = (bounds.maxLon - bounds.minLon) / gridSize;
 
     // Calculate center points of each grid cell
-    for (let i = 0; i < gridSize; i++) {
-        for (let j = 0; j < gridSize; j++) {
+    // For NE to SW, we reverse the iteration order
+    const latRange = direction === COLLECTION_DIRECTIONS.NORTHEAST_TO_SOUTHWEST
+        ? Array.from({length: gridSize}, (_, i) => gridSize - 1 - i)
+        : Array.from({length: gridSize}, (_, i) => i);
+    
+    const lonRange = direction === COLLECTION_DIRECTIONS.NORTHEAST_TO_SOUTHWEST
+        ? Array.from({length: gridSize}, (_, j) => gridSize - 1 - j)
+        : Array.from({length: gridSize}, (_, j) => j);
+
+    for (const i of latRange) {
+        for (const j of lonRange) {
             const lat = bounds.minLat + (i + 0.5) * latStep;
             const lon = bounds.minLon + (j + 0.5) * lonStep;
             points.push({ lat, lon });
@@ -331,33 +357,32 @@ async function fetchElevations(points, api) {
     }
 }
 
-// Modify collectHierarchicalPoints to use larger batches
+// Modify collectHierarchicalPoints to handle different directions
 async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS, parentI = 0, parentJ = 0) {
     if (level >= GRID_LEVELS.length) {
         return;
     }
 
     const gridConfig = GRID_LEVELS[level];
-    const levelMsg = `Processing grid level ${level + 1} (${level === 0 ? '10x10' : '10 points per cell'} grid)`;
+    const levelMsg = `Processing grid level ${level + 1} (${level === 0 ? '10x10' : '10 points per cell'} grid) - Direction: ${collectionDirection}`;
     logProgress(levelMsg);
     
     try {
-        // For the first level, use the full bounds. For subsequent levels, calculate sub-bounds
         const bounds = level === 0 ? parentBounds : calculateSubgridBounds(
             parentBounds, 
-            10, // Always use 10x10 grid
+            10,
             parentI, 
             parentJ
         );
 
-        // Calculate points for this grid level - always use 10x10 grid
-        const points = calculateGridPoints(bounds, 10);
+        // Calculate points for this grid level with specified direction
+        const points = calculateGridPoints(bounds, 10, collectionDirection);
         logProgress(`Generated ${points.length} points for level ${level + 1}`);
 
-        // Save progress to database
+        // Save progress to database with direction info
         await db.run(
-            'INSERT INTO collection_progress (current_level, points_collected, bounds) VALUES (?, 0, ?)',
-            [level + 1, JSON.stringify(bounds)]
+            'INSERT INTO collection_progress (current_level, points_collected, bounds, collection_direction) VALUES (?, 0, ?, ?)',
+            [level + 1, JSON.stringify(bounds), collectionDirection]
         );
 
         // Process points in larger batches
@@ -366,7 +391,6 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
 
         for (const point of points) {
             try {
-                // Check if point already exists
                 const exists = await checkPointExists(db, point.lat, point.lon);
                 if (!exists) {
                     currentBatch.push(point);
@@ -379,10 +403,9 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
                         await saveBatch(db, newPoints, level + 1);
                         processed += currentBatch.length;
                         
-                        // Update progress
                         await db.run(
-                            'UPDATE collection_progress SET points_collected = ? WHERE current_level = ? AND bounds = ?',
-                            [processed, level + 1, JSON.stringify(bounds)]
+                            'UPDATE collection_progress SET points_collected = ? WHERE current_level = ? AND bounds = ? AND collection_direction = ?',
+                            [processed, level + 1, JSON.stringify(bounds), collectionDirection]
                         );
                         
                         currentBatch = [];
@@ -405,10 +428,9 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
                 await saveBatch(db, newPoints, level + 1);
                 processed += currentBatch.length;
                 
-                // Update final progress
                 await db.run(
-                    'UPDATE collection_progress SET points_collected = ? WHERE current_level = ? AND bounds = ?',
-                    [processed, level + 1, JSON.stringify(bounds)]
+                    'UPDATE collection_progress SET points_collected = ? WHERE current_level = ? AND bounds = ? AND collection_direction = ?',
+                    [processed, level + 1, JSON.stringify(bounds), collectionDirection]
                 );
             } catch (error) {
                 logError(error, `Failed to process final batch at level ${level + 1}`);
@@ -417,10 +439,18 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
 
         logProgress(`Completed level ${level + 1}, processed ${processed} points`);
 
-        // Process next level - always use 10x10 grid for each cell
+        // Process next level with the same direction pattern
         if (level < GRID_LEVELS.length - 1) {
-            for (let i = 0; i < 10; i++) {
-                for (let j = 0; j < 10; j++) {
+            const iRange = collectionDirection === COLLECTION_DIRECTIONS.NORTHEAST_TO_SOUTHWEST
+                ? Array.from({length: 10}, (_, i) => 9 - i)
+                : Array.from({length: 10}, (_, i) => i);
+            
+            const jRange = collectionDirection === COLLECTION_DIRECTIONS.NORTHEAST_TO_SOUTHWEST
+                ? Array.from({length: 10}, (_, j) => 9 - j)
+                : Array.from({length: 10}, (_, j) => j);
+
+            for (const i of iRange) {
+                for (const j of jRange) {
                     await collectHierarchicalPoints(db, level + 1, bounds, i, j);
                 }
             }
@@ -431,14 +461,14 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
     }
 }
 
-// Modify initializeDatabase to include bounds in progress tracking
+// Modify initializeDatabase to include direction in progress tracking
 async function initializeDatabase() {
     const db = await open({
         filename: DB_FILE,
         driver: sqlite3.Database
     });
 
-    // Create tables if they don't exist
+    // First create tables with basic structure
     await db.exec(`
         CREATE TABLE IF NOT EXISTS elevation_points (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -458,9 +488,30 @@ async function initializeDatabase() {
             bounds TEXT NOT NULL,
             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        
+    `);
+
+    // Check if we need to add the collection_direction column
+    const tableInfo = await db.all("PRAGMA table_info(elevation_points)");
+    const hasDirectionColumn = tableInfo.some(col => col.name === 'collection_direction');
+
+    if (!hasDirectionColumn) {
+        // Add collection_direction column to existing tables
+        await db.exec(`
+            ALTER TABLE elevation_points 
+            ADD COLUMN collection_direction TEXT NOT NULL 
+            DEFAULT '${COLLECTION_DIRECTIONS.SOUTHWEST_TO_NORTHEAST}';
+
+            ALTER TABLE collection_progress 
+            ADD COLUMN collection_direction TEXT NOT NULL 
+            DEFAULT '${COLLECTION_DIRECTIONS.SOUTHWEST_TO_NORTHEAST}';
+        `);
+    }
+
+    // Create indices
+    await db.exec(`
         CREATE INDEX IF NOT EXISTS idx_points_location ON elevation_points(latitude, longitude);
         CREATE INDEX IF NOT EXISTS idx_points_grid_level ON elevation_points(grid_level);
+        CREATE INDEX IF NOT EXISTS idx_points_direction ON elevation_points(collection_direction);
     `);
 
     return db;
@@ -540,40 +591,38 @@ async function main() {
     const db = await initializeDatabase();
     
     try {
-        // Check if we're in enhance mode
         const isEnhanceMode = process.argv.includes('--enhance');
         
         if (isEnhanceMode) {
-            // Original enhance mode logic
             let bounds = await loadEnhanceBounds();
             if (!bounds) {
                 console.error('No enhancement bounds found');
                 return;
             }
-            // ... rest of enhance mode code ...
         } else {
-            // New hierarchical collection mode
-            console.log('Starting hierarchical point collection');
+            console.log(`Starting hierarchical point collection - Direction: ${collectionDirection}`);
             await collectHierarchicalPoints(db);
             
-            // Print final statistics
             const stats = await db.get(`
                 SELECT 
                     COUNT(*) as total,
-                    COUNT(DISTINCT source) as sources
+                    COUNT(DISTINCT source) as sources,
+                    collection_direction
                 FROM elevation_points
-            `);
+                WHERE collection_direction = ?
+                GROUP BY collection_direction
+            `, [collectionDirection]);
             
             console.log('\nCollection complete!');
-            console.log(`Total points collected: ${stats.total}`);
-            console.log(`Number of data sources: ${stats.sources}`);
+            console.log(`Total points collected (${collectionDirection}): ${stats?.total || 0}`);
+            console.log(`Number of data sources: ${stats?.sources || 0}`);
             
-            // Print points per source
             const sourceStats = await db.all(`
                 SELECT source, COUNT(*) as count 
                 FROM elevation_points 
+                WHERE collection_direction = ?
                 GROUP BY source
-            `);
+            `, [collectionDirection]);
             
             console.log('\nPoints per source:');
             sourceStats.forEach(({ source, count }) => {
