@@ -1,0 +1,43 @@
+{
+    "instances": {
+        "pi1": {
+            "id": "pi1",
+            "name": "Primary Pi",
+            "ip": "10.0.0.68",
+            "grids": [0, 1, 2, 3, 4],
+            "syncInterval": 300000,
+            "apiKey": "pi1_key_${RANDOM_STRING}",
+            "isMaster": true
+        },
+        "pi2": {
+            "id": "pi2",
+            "name": "Secondary Pi",
+            "ip": "10.0.0.69",
+            "grids": [5, 6, 7, 8, 9],
+            "syncInterval": 300000,
+            "apiKey": "pi2_key_${RANDOM_STRING}",
+            "isMaster": false
+        }
+    },
+    "sync": {
+        "enabled": true,
+        "method": "rsync",
+        "targetDir": "/home/pi/nm_elevation/grid_databases",
+        "exclude": ["*.db-journal", "*.log"],
+        "retryAttempts": 3,
+        "retryDelay": 60000,
+        "verifyAfterSync": true
+    },
+    "logging": {
+        "level": "info",
+        "file": "pi_sync.log",
+        "maxSize": "10m",
+        "maxFiles": 5
+    },
+    "backup": {
+        "enabled": true,
+        "schedule": "0 0 * * *",
+        "targetDir": "/home/pi/nm_elevation/backups",
+        "keepBackups": 7
+    }
+} 
