@@ -35,9 +35,6 @@ const DELAY_MS = 2000;  // 2 second delay between batches
 const REQUEST_TIMEOUT = 15000;  // 15 second timeout
 const POINTS_TO_COLLECT = 1000;  // Reduced to 1k points for lower resolution
 
-// Use different DB files based on direction
-const DB_FILE = process.argv.includes('--direction=ne_to_sw') ? 'mountains_ne_sw.db' : 'mountains.db';
-
 // New Mexico bounds
 const NM_BOUNDS = {
     minLat: 31.33,
@@ -154,29 +151,14 @@ const API_STATUS = {
 let lastSuccessfulApiIndex = -1;
 
 // Modify calculateGridPoints to handle different directions
-function calculateGridPoints(bounds, gridSize, direction = collectionDirection) {
+function calculateGridPoints(bounds, numPoints) {
     const points = [];
-    const latStep = (bounds.maxLat - bounds.minLat) / gridSize;
-    const lonStep = (bounds.maxLon - bounds.minLon) / gridSize;
-
-    // Calculate center points of each grid cell
-    // For NE to SW, we reverse the iteration order
-    const latRange = direction === COLLECTION_DIRECTIONS.NORTHEAST_TO_SOUTHWEST
-        ? Array.from({length: gridSize}, (_, i) => gridSize - 1 - i)
-        : Array.from({length: gridSize}, (_, i) => i);
-    
-    const lonRange = direction === COLLECTION_DIRECTIONS.NORTHEAST_TO_SOUTHWEST
-        ? Array.from({length: gridSize}, (_, j) => gridSize - 1 - j)
-        : Array.from({length: gridSize}, (_, j) => j);
-
-    for (const i of latRange) {
-        for (const j of lonRange) {
-            const lat = bounds.minLat + (i + 0.5) * latStep;
-            const lon = bounds.minLon + (j + 0.5) * lonStep;
-            points.push({ lat, lon });
-        }
+    for (let i = 0; i < numPoints; i++) {
+        // Generate random points within the bounds
+        const lat = bounds.minLat + Math.random() * (bounds.maxLat - bounds.minLat);
+        const lon = bounds.minLon + Math.random() * (bounds.maxLon - bounds.minLon);
+        points.push({ lat, lon });
     }
-
     return points;
 }
 
@@ -470,59 +452,80 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
 }
 
 // Modify initializeDatabase to include direction in progress tracking
-async function initializeDatabase() {
+async function initializeDatabase(dbPath) {
+    // Check if database exists
+    const dbExists = fs.existsSync(dbPath);
+    
     const db = await open({
-        filename: DB_FILE,
+        filename: dbPath,
         driver: sqlite3.Database
     });
 
-    // First create tables with basic structure
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS elevation_points (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            latitude REAL NOT NULL,
-            longitude REAL NOT NULL,
-            elevation REAL NOT NULL,
-            source TEXT NOT NULL,
-            grid_level INTEGER NOT NULL,
-            collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(latitude, longitude)
-        );
-        
-        CREATE TABLE IF NOT EXISTS collection_progress (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            current_level INTEGER NOT NULL,
-            points_collected INTEGER NOT NULL,
-            bounds TEXT NOT NULL,
-            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    `);
+    try {
+        if (!dbExists) {
+            console.log('Creating new database with schema...');
+            // Create tables with basic structure
+            await db.exec(`
+                CREATE TABLE elevation_points (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    elevation REAL NOT NULL,
+                    source TEXT NOT NULL,
+                    grid_level INTEGER NOT NULL DEFAULT 0,
+                    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(latitude, longitude)
+                );
+                
+                CREATE TABLE collection_progress (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    current_level INTEGER NOT NULL,
+                    points_collected INTEGER NOT NULL,
+                    bounds TEXT NOT NULL,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
 
-    // Check if we need to add the collection_direction column
-    const tableInfo = await db.all("PRAGMA table_info(elevation_points)");
-    const hasDirectionColumn = tableInfo.some(col => col.name === 'collection_direction');
+                CREATE INDEX idx_points_location ON elevation_points(latitude, longitude);
+                CREATE INDEX idx_points_grid_level ON elevation_points(grid_level);
+            `);
+        } else {
+            console.log('Database exists, checking schema...');
+            
+            // Drop and recreate tables to ensure correct structure
+            await db.exec(`
+                DROP TABLE IF EXISTS elevation_points;
+                DROP TABLE IF EXISTS collection_progress;
+                
+                CREATE TABLE elevation_points (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    elevation REAL NOT NULL,
+                    source TEXT NOT NULL,
+                    grid_level INTEGER NOT NULL DEFAULT 0,
+                    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(latitude, longitude)
+                );
+                
+                CREATE TABLE collection_progress (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    current_level INTEGER NOT NULL,
+                    points_collected INTEGER NOT NULL,
+                    bounds TEXT NOT NULL,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
 
-    if (!hasDirectionColumn) {
-        // Add collection_direction column to existing tables
-        await db.exec(`
-            ALTER TABLE elevation_points 
-            ADD COLUMN collection_direction TEXT NOT NULL 
-            DEFAULT '${COLLECTION_DIRECTIONS.SOUTHWEST_TO_NORTHEAST}';
+                CREATE INDEX idx_points_location ON elevation_points(latitude, longitude);
+                CREATE INDEX idx_points_grid_level ON elevation_points(grid_level);
+            `);
+        }
 
-            ALTER TABLE collection_progress 
-            ADD COLUMN collection_direction TEXT NOT NULL 
-            DEFAULT '${COLLECTION_DIRECTIONS.SOUTHWEST_TO_NORTHEAST}';
-        `);
+        return db;
+    } catch (error) {
+        console.error('Error initializing database:', error);
+        await db.close();
+        throw error;
     }
-
-    // Create indices
-    await db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_points_location ON elevation_points(latitude, longitude);
-        CREATE INDEX IF NOT EXISTS idx_points_grid_level ON elevation_points(grid_level);
-        CREATE INDEX IF NOT EXISTS idx_points_direction ON elevation_points(collection_direction);
-    `);
-
-    return db;
 }
 
 async function getProgress(db, gridSize) {
@@ -566,7 +569,7 @@ async function checkPointExists(db, lat, lon) {
 
 async function saveBatch(db, points, gridLevel) {
     const stmt = await db.prepare(`
-        INSERT INTO elevation_points (latitude, longitude, elevation, source, grid_level)
+        INSERT OR IGNORE INTO elevation_points (latitude, longitude, elevation, source, grid_level)
         VALUES (?, ?, ?, ?, ?)
     `);
     
@@ -595,50 +598,125 @@ async function loadEnhanceBounds() {
     return null;
 }
 
-async function main() {
-    const db = await initializeDatabase();
-    
-    try {
-        const isEnhanceMode = process.argv.includes('--enhance');
-        
-        if (isEnhanceMode) {
-            let bounds = await loadEnhanceBounds();
-            if (!bounds) {
-                console.error('No enhancement bounds found');
-                return;
+async function findMostIncompleteDatabase() {
+    const gridSize = 10;
+    let mostIncomplete = null;
+    let lowestCompletion = 1.0; // 100%
+
+    for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+            const dbPath = path.join(__dirname, 'grid_databases', `mountains_${i}_${j}.db`);
+            if (!fs.existsSync(dbPath)) {
+                return { x: i, y: j, points: 0, completion: 0 };
             }
-        } else {
-            console.log(`Starting hierarchical point collection - Direction: ${collectionDirection}`);
-            await collectHierarchicalPoints(db);
-            
-            const stats = await db.get(`
-                SELECT 
-                    COUNT(*) as total,
-                    COUNT(DISTINCT source) as sources,
-                    collection_direction
-                FROM elevation_points
-                WHERE collection_direction = ?
-                GROUP BY collection_direction
-            `, [collectionDirection]);
-            
-            console.log('\nCollection complete!');
-            console.log(`Total points collected (${collectionDirection}): ${stats?.total || 0}`);
-            console.log(`Number of data sources: ${stats?.sources || 0}`);
-            
-            const sourceStats = await db.all(`
-                SELECT source, COUNT(*) as count 
-                FROM elevation_points 
-                WHERE collection_direction = ?
-                GROUP BY source
-            `, [collectionDirection]);
-            
-            console.log('\nPoints per source:');
-            sourceStats.forEach(({ source, count }) => {
-                console.log(`  ${source}: ${count} points`);
+
+            const db = await open({
+                filename: dbPath,
+                driver: sqlite3.Database
             });
+
+            const result = await db.get('SELECT COUNT(*) as count FROM elevation_points');
+            const points = result.count;
+            const completion = points / 10000; // Target is 10K points
+
+            if (completion < lowestCompletion) {
+                lowestCompletion = completion;
+                mostIncomplete = { x: i, y: j, points, completion };
+            }
+
+            await db.close();
         }
-    } finally {
+    }
+
+    return mostIncomplete;
+}
+
+async function main() {
+    try {
+        // Find the most incomplete database
+        const targetGrid = await findMostIncompleteDatabase();
+        console.log(`Targeting grid (${targetGrid.x}, ${targetGrid.y}) with ${targetGrid.points} points (${(targetGrid.completion * 100).toFixed(2)}% complete)`);
+
+        // Calculate bounds for this grid cell
+        const latStep = (NM_BOUNDS.maxLat - NM_BOUNDS.minLat) / 10;
+        const lonStep = (NM_BOUNDS.maxLon - NM_BOUNDS.minLon) / 10;
+        
+        const gridBounds = {
+            minLat: NM_BOUNDS.minLat + (targetGrid.y * latStep),
+            maxLat: NM_BOUNDS.minLat + ((targetGrid.y + 1) * latStep),
+            minLon: NM_BOUNDS.minLon + (targetGrid.x * lonStep),
+            maxLon: NM_BOUNDS.minLon + ((targetGrid.x + 1) * lonStep)
+        };
+
+        // Initialize database for this grid
+        const dbPath = path.join(__dirname, 'grid_databases', `mountains_${targetGrid.x}_${targetGrid.y}.db`);
+        console.log(`Using database: ${dbPath}`);
+        const db = await initializeDatabase(dbPath);
+
+        // Collect points until we reach 10K
+        let pointsCollected = targetGrid.points;
+        const targetPoints = 10000;
+        let consecutiveEmptyBatches = 0;
+        const MAX_EMPTY_BATCHES = 5;
+
+        while (pointsCollected < targetPoints) {
+            const remainingPoints = targetPoints - pointsCollected;
+            const batchSize = Math.min(remainingPoints, DEFAULT_BATCH_SIZE);
+            
+            // Generate random points for this batch
+            const points = calculateGridPoints(gridBounds, batchSize);
+            
+            // Filter out points that already exist
+            const newPoints = [];
+            for (const point of points) {
+                const exists = await checkPointExists(db, point.lat, point.lon);
+                if (!exists) {
+                    newPoints.push(point);
+                }
+            }
+
+            if (newPoints.length === 0) {
+                consecutiveEmptyBatches++;
+                console.log(`No new points to collect in this batch (attempt ${consecutiveEmptyBatches}/${MAX_EMPTY_BATCHES})`);
+                
+                if (consecutiveEmptyBatches >= MAX_EMPTY_BATCHES) {
+                    console.log('Too many consecutive empty batches. Checking if we need to adjust our approach...');
+                    // Get a count of existing points
+                    const result = await db.get('SELECT COUNT(*) as count FROM elevation_points');
+                    console.log(`Current point count: ${result.count}`);
+                    
+                    if (result.count >= targetPoints) {
+                        console.log('Target point count reached!');
+                        break;
+                    }
+                    
+                    // Reset counter and continue
+                    consecutiveEmptyBatches = 0;
+                }
+                continue;
+            }
+            
+            // Reset empty batch counter when we find new points
+            consecutiveEmptyBatches = 0;
+            
+            // Process the batch
+            const results = await processBatch(newPoints);
+            if (results.length > 0) {
+                await saveBatch(db, results, 0);
+                pointsCollected += results.length;
+                console.log(`Progress: ${pointsCollected}/${targetPoints} points (${((pointsCollected/targetPoints) * 100).toFixed(2)}%)`);
+            }
+
+            // Add delay between batches
+            await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        }
+
+        console.log(`Completed collection for grid (${targetGrid.x}, ${targetGrid.y})`);
         await db.close();
+
+    } catch (error) {
+        console.error('Error in main:', error);
+        process.exit(1);
     }
 }
 

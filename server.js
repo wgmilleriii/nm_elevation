@@ -18,16 +18,19 @@ app.use(express.json());  // Add JSON body parser
 app.use(express.urlencoded({ extended: true }));  // Add URL-encoded parser
 
 // Initialize database connection
-async function getDb() {
-    const dbPath = path.join(__dirname, 'mountains.db');
+async function getDb(lat, lon) {
+    // Determine grid coordinates based on lat and lon
+    const gridX = Math.floor((lon - (-109.05)) / ((-103.00) - (-109.05)) * 10);
+    const gridY = Math.floor((lat - 31.33) / (37.00 - 31.33) * 10);
+    const dbPath = path.join(__dirname, 'grid_databases', `mountains_${gridX}_${gridY}.db');
     
     // Check if database exists
     if (!fs.existsSync(dbPath)) {
-        console.error('Database file not found:', dbPath);
-        throw new Error('Database file not found');
+        console.error('Grid database file not found:', dbPath);
+        throw new Error('Grid database file not found');
     }
     
-    console.log('Opening database at:', dbPath);
+    console.log('Opening grid database at:', dbPath);
     return open({
         filename: dbPath,
         driver: sqlite3.Database
@@ -38,7 +41,11 @@ app.get('/api/elevation-data', async (req, res) => {
     try {
         const isHighRes = req.query.resolution === 'high';
         console.log(`Received request for elevation data (${isHighRes ? 'high' : 'low'} resolution)`);
-        const db = await getDb();
+        
+        // Use a default grid (e.g., 0,0) if no coordinates are provided
+        const lat = parseFloat(req.query.lat) || 31.33;
+        const lon = parseFloat(req.query.lon) || -109.05;
+        const db = await getDb(lat, lon);
         
         // Check if table exists
         const tableCheck = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='elevation_points'");
@@ -226,7 +233,7 @@ app.get('/api/santa-fe-elevation', async (req, res) => {
             throw new Error('Invalid parameters');
         }
         
-        const db = await getDb();
+        const db = await getDb(centerLat, centerLon);
         
         // Get points within a larger radius to show available data
         const searchRadius = radiusKm * 2; // Double the search radius
@@ -347,7 +354,7 @@ app.post('/api/enhance-region', async (req, res) => {
         }
 
         // Pre-populate grid points with NULL elevations
-        const db = await getDb();
+        const db = await getDb(bounds.maxLat, bounds.minLon);
         await db.run('BEGIN TRANSACTION');
 
         try {
