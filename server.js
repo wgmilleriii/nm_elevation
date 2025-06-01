@@ -47,7 +47,7 @@ app.get('/api/elevation-data', async (req, res) => {
             throw new Error('Database table not found');
         }
         
-        // In low-res mode, only select every 10th point using ROW_NUMBER
+        // In low-res mode, only select every 7th point using ROW_NUMBER
         const query = isHighRes ? 
             'SELECT latitude, longitude, elevation FROM elevation_points' :
             `WITH numbered_points AS (
@@ -57,7 +57,7 @@ app.get('/api/elevation-data', async (req, res) => {
             )
             SELECT latitude, longitude, elevation
             FROM numbered_points
-            WHERE row_num % 10 = 0`;
+            WHERE row_num % 2 = 0`;
         
         const data = await db.all(query);
         console.log(`Found ${data.length} elevation points`);

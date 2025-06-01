@@ -37,7 +37,8 @@ Thumbs.db
 elevation_cache.json
 test_cache.js
 cache.js
-summary.log
+# summary.log is now tracked
+# summary.log
 
 # Large data files
 *.tif
@@ -139,3 +140,5 @@ yarn-error.log*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log* 
+
+mountains.db

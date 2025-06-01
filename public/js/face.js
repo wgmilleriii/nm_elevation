@@ -7,6 +7,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 // Store map points layer
 let mapPointsLayer = null;
+let cachedData = null;
 
 // Custom circle marker for elevation points
 const ElevationCircle = L.CircleMarker.extend({
@@ -19,8 +20,12 @@ const ElevationCircle = L.CircleMarker.extend({
 
 // --- SVG1: Elevation Points ---
 async function fetchData() {
-    const response = await fetch('/api/elevation-data?resolution=high');
-    return response.json();
+    if (cachedData) {
+        return cachedData;
+    }
+    const response = await fetch('/api/elevation-data?resolution=low');
+    cachedData = await response.json();
+    return cachedData;
 }
 
 function getElevationColor(elevation, minElevation, maxElevation) {
