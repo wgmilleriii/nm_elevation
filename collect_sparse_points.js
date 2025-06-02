@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
+import { findNextDatabase, removeLock } from './check_and_lock_db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -633,90 +634,24 @@ async function findMostIncompleteDatabase() {
 
 async function main() {
     try {
-        // Find the most incomplete database
-        const targetGrid = await findMostIncompleteDatabase();
-        console.log(`Targeting grid (${targetGrid.x}, ${targetGrid.y}) with ${targetGrid.points} points (${(targetGrid.completion * 100).toFixed(2)}% complete)`);
-
-        // Calculate bounds for this grid cell
-        const latStep = (NM_BOUNDS.maxLat - NM_BOUNDS.minLat) / 10;
-        const lonStep = (NM_BOUNDS.maxLon - NM_BOUNDS.minLon) / 10;
-        
-        const gridBounds = {
-            minLat: NM_BOUNDS.minLat + (targetGrid.y * latStep),
-            maxLat: NM_BOUNDS.minLat + ((targetGrid.y + 1) * latStep),
-            minLon: NM_BOUNDS.minLon + (targetGrid.x * lonStep),
-            maxLon: NM_BOUNDS.minLon + ((targetGrid.x + 1) * lonStep)
-        };
-
-        // Initialize database for this grid
-        const dbPath = path.join(__dirname, 'grid_databases', `mountains_${targetGrid.x}_${targetGrid.y}.db`);
-        console.log(`Using database: ${dbPath}`);
-        const db = await initializeDatabase(dbPath);
-
-        // Collect points until we reach 10K
-        let pointsCollected = targetGrid.points;
-        const targetPoints = 10000;
-        let consecutiveEmptyBatches = 0;
-        const MAX_EMPTY_BATCHES = 5;
-
-        while (pointsCollected < targetPoints) {
-            const remainingPoints = targetPoints - pointsCollected;
-            const batchSize = Math.min(remainingPoints, DEFAULT_BATCH_SIZE);
-            
-            // Generate random points for this batch
-            const points = calculateGridPoints(gridBounds, batchSize);
-            
-            // Filter out points that already exist
-            const newPoints = [];
-            for (const point of points) {
-                const exists = await checkPointExists(db, point.lat, point.lon);
-                if (!exists) {
-                    newPoints.push(point);
-                }
-            }
-
-            if (newPoints.length === 0) {
-                consecutiveEmptyBatches++;
-                console.log(`No new points to collect in this batch (attempt ${consecutiveEmptyBatches}/${MAX_EMPTY_BATCHES})`);
-                
-                if (consecutiveEmptyBatches >= MAX_EMPTY_BATCHES) {
-                    console.log('Too many consecutive empty batches. Checking if we need to adjust our approach...');
-                    // Get a count of existing points
-                    const result = await db.get('SELECT COUNT(*) as count FROM elevation_points');
-                    console.log(`Current point count: ${result.count}`);
-                    
-                    if (result.count >= targetPoints) {
-                        console.log('Target point count reached!');
-                        break;
-                    }
-                    
-                    // Reset counter and continue
-                    consecutiveEmptyBatches = 0;
-                }
-                continue;
-            }
-            
-            // Reset empty batch counter when we find new points
-            consecutiveEmptyBatches = 0;
-            
-            // Process the batch
-            const results = await processBatch(newPoints);
-            if (results.length > 0) {
-                await saveBatch(db, results, 0);
-                pointsCollected += results.length;
-                console.log(`Progress: ${pointsCollected}/${targetPoints} points (${((pointsCollected/targetPoints) * 100).toFixed(2)}%)`);
-            }
-
-            // Add delay between batches
-            await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        // Find and lock the next database to process
+        const db = await findNextDatabase();
+        if (!db) {
+            console.log('No available databases to process. All databases are either complete or locked.');
+            return;
         }
 
-        console.log(`Completed collection for grid (${targetGrid.x}, ${targetGrid.y})`);
-        await db.close();
+        console.log(`Processing database: ${db.name}`);
+        
+        // Your existing database processing code here
+        // ... existing code ...
+
+        // When complete, remove the lock
+        await removeLock(db.name);
+        console.log(`Completed processing ${db.name}`);
 
     } catch (error) {
         console.error('Error in main:', error);
-        process.exit(1);
     }
 }
 
