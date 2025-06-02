@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-06-02T22:19:06.598Z",
+  "timestamp": "2025-06-02T22:20:22.527Z",
   "pcResults": [
     {
       "gridX": 0,
@@ -208,8 +208,8 @@
       "gridX": 2,
       "gridY": 9,
       "exists": true,
-      "points": 739,
-      "percentComplete": "7.39"
+      "points": 1249,
+      "percentComplete": "12.49"
     },
     {
       "gridX": 3,
@@ -278,8 +278,8 @@
       "gridX": 3,
       "gridY": 9,
       "exists": true,
-      "points": 189,
-      "percentComplete": "1.89"
+      "points": 569,
+      "percentComplete": "5.69"
     },
     {
       "gridX": 4,
