@@ -46,15 +46,19 @@ async function syncLockFiles(retries = 3, delay = 1000) {
                 // Sync from PC to Pi1 using scp
                 logSync(`Attempting to sync locks from PC to Pi1 (attempt ${attempt + 1}/${maxRetries})`);
                 
-                // First ensure the locks directory exists
+                // First ensure the locks directory exists on Pi
                 execSync(`ssh -i "C:/Users/Wgmil/.ssh/pi_auto_key" pi@10.0.0.68 "mkdir -p /home/pi/nm_elevation/locks"`, {
                     stdio: 'pipe'
                 });
 
+                // Ensure local locks directory exists
+                if (!fs.existsSync(LOCK_DIR)) {
+                    fs.mkdirSync(LOCK_DIR, { recursive: true });
+                }
+
                 // Get list of lock files
                 const lockFiles = fs.readdirSync(LOCK_DIR)
-                    .filter(file => file.endsWith('.lock'))
-                    .map(file => path.join(LOCK_DIR, file));
+                    .filter(file => file.endsWith('.lock'));
 
                 if (lockFiles.length === 0) {
                     logSync('No lock files to sync');
@@ -63,7 +67,8 @@ async function syncLockFiles(retries = 3, delay = 1000) {
 
                 // Copy each lock file individually
                 for (const lockFile of lockFiles) {
-                    execSync(`scp -i "C:/Users/Wgmil/.ssh/pi_auto_key" "${lockFile}" "pi@10.0.0.68:/home/pi/nm_elevation/locks/"`, {
+                    const sourcePath = path.join(LOCK_DIR, lockFile);
+                    execSync(`scp -i "C:/Users/Wgmil/.ssh/pi_auto_key" "${sourcePath}" "pi@10.0.0.68:/home/pi/nm_elevation/locks/"`, {
                         stdio: 'pipe'
                     });
                 }
@@ -73,15 +78,14 @@ async function syncLockFiles(retries = 3, delay = 1000) {
                 // Sync from Pi to PC using scp
                 logSync(`Attempting to sync locks from Pi to PC (attempt ${attempt + 1}/${maxRetries})`);
                 
-                // First ensure the locks directory exists
+                // First ensure the locks directory exists locally
                 if (!fs.existsSync(LOCK_DIR)) {
                     fs.mkdirSync(LOCK_DIR, { recursive: true });
                 }
 
                 // Get list of lock files
                 const lockFiles = fs.readdirSync(LOCK_DIR)
-                    .filter(file => file.endsWith('.lock'))
-                    .map(file => path.join(LOCK_DIR, file));
+                    .filter(file => file.endsWith('.lock'));
 
                 if (lockFiles.length === 0) {
                     logSync('No lock files to sync');
@@ -90,7 +94,8 @@ async function syncLockFiles(retries = 3, delay = 1000) {
 
                 // Copy each lock file individually
                 for (const lockFile of lockFiles) {
-                    execSync(`scp -i /home/pi/.ssh/pi_auto_key "${lockFile}" "C:/Users/Wgmil/OneDrive/Documents/GitHub/nm_elevation/locks/"`, {
+                    const sourcePath = path.join(LOCK_DIR, lockFile);
+                    execSync(`scp -i /home/pi/.ssh/pi_auto_key "${sourcePath}" "C:/Users/Wgmil/OneDrive/Documents/GitHub/nm_elevation/locks/"`, {
                         stdio: 'pipe'
                     });
                 }

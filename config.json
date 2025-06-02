@@ -1,13 +1,32 @@
 {
     "instances": {
+        "pc": {
+            "id": "pc",
+            "name": "Windows PC",
+            "ip": "10.0.0.1",
+            "grids": [0, 1, 2],
+            "syncInterval": 300000,
+            "apiKey": "pc_key_${RANDOM_STRING}",
+            "isMaster": true,
+            "mysql": {
+                "port": 3307,
+                "username": "root",
+                "password": "root"
+            }
+        },
         "pi1": {
             "id": "pi1",
             "name": "Primary Pi",
             "ip": "10.0.0.68",
-            "grids": [0, 1, 2, 3, 4],
+            "grids": [3, 4, 5],
             "syncInterval": 300000,
             "apiKey": "pi1_key_${RANDOM_STRING}",
-            "isMaster": true
+            "isMaster": false,
+            "mysql": {
+                "port": 3306,
+                "username": "root",
+                "password": "root"
+            }
         },
         "pi2": {
             "id": "pi2",
@@ -30,14 +49,14 @@
     },
     "logging": {
         "level": "info",
-        "file": "pi_sync.log",
+        "file": "sync.log",
         "maxSize": "10m",
         "maxFiles": 5
     },
     "backup": {
         "enabled": true,
         "schedule": "0 0 * * *",
-        "targetDir": "/home/pi/nm_elevation/backups",
+        "targetDir": "backups",
         "keepBackups": 7
     }
 } 

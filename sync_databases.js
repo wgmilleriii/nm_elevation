@@ -24,31 +24,63 @@ const logger = winston.createLogger({
     ]
 });
 
-async function syncDatabases(sourcePi, targetPi) {
-    const sourceConfig = config.instances[sourcePi];
-    const targetConfig = config.instances[targetPi];
-    
-    logger.info(`Starting sync from ${sourcePi} to ${targetPi}`);
-    
+// Function to check if a database file exists
+function checkDatabaseFile(gridId) {
+    const dbPath = path.join(config.sync.targetDir, `mountains_${gridId}.db`);
+    return fs.existsSync(dbPath);
+}
+
+// Function to sync databases
+async function syncDatabases() {
     try {
-        // Create sync command based on config
-        const syncCmd = `rsync -avz --delete \
-            --exclude '${config.sync.exclude.join("' --exclude '")}' \
-            ${config.sync.targetDir}/ \
-            pi@${targetPi}:${config.sync.targetDir}/`;
-        
-        logger.info(`Executing sync command: ${syncCmd}`);
-        const { stdout, stderr } = await execAsync(syncCmd);
-        
-        if (stderr) {
-            logger.warn(`Sync warnings: ${stderr}`);
+        // Get PC and pi1 instances
+        const pc = config.instances.pc;
+        const pi1 = config.instances.pi1;
+
+        // Check PC databases
+        logger.info('Checking PC databases...');
+        for (const gridId of pc.grids) {
+            if (!checkDatabaseFile(gridId)) {
+                logger.warn(`Database file missing for grid ${gridId} on PC`);
+            }
         }
+
+        // Check pi1 databases
+        logger.info('Checking pi1 databases...');
+        for (const gridId of pi1.grids) {
+            if (!checkDatabaseFile(gridId)) {
+                logger.warn(`Database file missing for grid ${gridId} on pi1`);
+            }
+        }
+
+        // Sync from PC to pi1
+        logger.info('Starting sync from PC to pi1');
+        const pcToPi1Cmd = `rsync -avz --delete --exclude '*.db-journal' --exclude '*.log' ${config.sync.targetDir}/ pi@${pi1.ip}:${config.sync.targetDir}/`;
+        logger.info(`Executing sync command: ${pcToPi1Cmd}`);
         
-        logger.info(`Sync completed: ${stdout}`);
-        return true;
+        exec(pcToPi1Cmd, (error, stdout, stderr) => {
+            if (error) {
+                logger.error(`Sync failed: ${error.message}`);
+                return;
+            }
+            logger.info('Sync from PC to pi1 completed successfully');
+        });
+
+        // Sync from pi1 to PC
+        logger.info('Starting sync from pi1 to PC');
+        const pi1ToPcCmd = `rsync -avz --delete --exclude '*.db-journal' --exclude '*.log' pi@${pi1.ip}:${config.sync.targetDir}/ ${config.sync.targetDir}/`;
+        logger.info(`Executing sync command: ${pi1ToPcCmd}`);
+        
+        exec(pi1ToPcCmd, (error, stdout, stderr) => {
+            if (error) {
+                logger.error(`Sync failed: ${error.message}`);
+                return;
+            }
+            logger.info('Sync from pi1 to PC completed successfully');
+        });
+
     } catch (error) {
-        logger.error(`Sync failed: ${error.message}`);
-        return false;
+        logger.error(`Error during sync: ${error.message}`);
     }
 }
 
@@ -96,8 +128,15 @@ async function main() {
     }
 }
 
-// Run sync every interval
-setInterval(main, config.instances.pi1.syncInterval);
+// Run sync immediately and then on interval
+syncDatabases();
+setInterval(syncDatabases, config.sync.syncInterval);
+
+// Handle process termination
+process.on('SIGTERM', () => {
+    logger.info('Sync service shutting down');
+    process.exit(0);
+});
 
 // Initial run
 main().catch(error => {

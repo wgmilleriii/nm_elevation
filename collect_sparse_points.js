@@ -63,8 +63,9 @@ const APIS = [
     {
         name: 'open-meteo',
         url: (points) => {
-            const locations = points.map(p => `${p.lat},${p.lon}`).join(',');
-            return `https://api.open-meteo.com/v1/elevation?latitude=${locations.split(',').filter((_, i) => i % 2 === 0).join(',')}&longitude=${locations.split(',').filter((_, i) => i % 2 === 1).join(',')}`;
+            const lats = points.map(p => p.lat).join(',');
+            const lons = points.map(p => p.lon).join(',');
+            return `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
         },
         parseResponse: (data, points) => {
             const elevations = Array.isArray(data.elevation) ? data.elevation : [data.elevation];
@@ -93,7 +94,8 @@ const APIS = [
     {
         name: 'open-elevation',
         url: (points) => {
-            return `https://api.open-elevation.com/api/v1/lookup?locations=${points.map(p => `${p.lat},${p.lon}`).join('|')}`;
+            const locations = points.map(p => `${p.lat},${p.lon}`).join('|');
+            return `https://api.open-elevation.com/api/v1/lookup?locations=${locations}`;
         },
         parseResponse: (data, points) => 
             data.results.map((r, i) => ({
@@ -190,6 +192,14 @@ function logProgress(message) {
     console.log(message);
 }
 
+// Add more detailed logging
+function logDetailedProgress(message) {
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} - DETAILED - ${message}\n`;
+    fs.appendFileSync('collection_progress.log', logEntry);
+    console.log(`Detailed: ${message}`);
+}
+
 // Replace handleRateLimit function
 async function handleRateLimit(api) {
     const status = API_STATUS[api.name];
@@ -279,6 +289,7 @@ async function processBatch(points) {
             // Process each sub-batch
             const allResults = [];
             for (const subBatch of subBatches) {
+                logDetailedProgress(`Processing sub-batch with ${subBatch.length} points using ${api.name}`);
                 const result = await fetchElevations(subBatch, api);
                 allResults.push(...result);
                 
@@ -315,28 +326,57 @@ async function processBatch(points) {
     throw new Error(`Failed to get elevation data after ${attempts} attempts across all APIs`);
 }
 
-// Fetch elevations for multiple points
+const RATE_LIMIT_DELAY = 1000; // 1 second delay between API calls
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds between retries
+
 async function fetchElevations(points, api) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-    
-    try {
-        const response = await fetch(api.url(points), { 
-            signal: controller.signal,
-            headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'Elevation-Collector/1.0'
+    let retries = 0;
+    while (retries < MAX_RETRIES) {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+            const response = await fetch(api.url(points), {
+                method: 'GET',  // Changed to GET for all APIs
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'Elevation-Collector/1.0'
+                },
+                signal: controller.signal
+            });
+
+            clearTimeout(timeout);
+
+            if (response.status === 429) {
+                console.log(`Rate limited by ${api.name}, waiting ${RATE_LIMIT_DELAY}ms...`);
+                await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+                retries++;
+                continue;
             }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status} from ${api.name}`);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status} from ${api.name}`);
+            }
+
+            const data = await response.json();
+            return api.parseResponse(data, points);
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log(`Request to ${api.name} timed out, retrying...`);
+            } else if (error.message.includes('ECONNRESET')) {
+                console.log(`Connection reset by ${api.name}, retrying...`);
+            } else {
+                throw error;
+            }
+            
+            retries++;
+            if (retries < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+            } else {
+                throw error;
+            }
         }
-        
-        const data = await response.json();
-        return api.parseResponse(data, points);
-    } finally {
-        clearTimeout(timeout);
     }
 }
 
@@ -483,6 +523,9 @@ async function initializeDatabase(dbPath) {
                     current_level INTEGER NOT NULL,
                     points_collected INTEGER NOT NULL,
                     bounds TEXT NOT NULL,
+                    grid_size INTEGER NOT NULL,
+                    current_i INTEGER NOT NULL,
+                    current_j INTEGER NOT NULL,
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -513,6 +556,9 @@ async function initializeDatabase(dbPath) {
                     current_level INTEGER NOT NULL,
                     points_collected INTEGER NOT NULL,
                     bounds TEXT NOT NULL,
+                    grid_size INTEGER NOT NULL,
+                    current_i INTEGER NOT NULL,
+                    current_j INTEGER NOT NULL,
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -634,21 +680,29 @@ async function findMostIncompleteDatabase() {
 
 async function main() {
     try {
-        // Find and lock the next database to process
-        const db = await findNextDatabase();
+        // Find the next database to process without locking
+        const db = await findMostIncompleteDatabase();
         if (!db) {
-            console.log('No available databases to process. All databases are either complete or locked.');
+            console.log('No available databases to process.');
             return;
         }
 
-        console.log(`Processing database: ${db.name}`);
+        console.log(`Processing database: mountains_${db.x}_${db.y}.db`);
         
-        // Your existing database processing code here
-        // ... existing code ...
+        // Initialize database connection
+        const dbPath = path.join(__dirname, 'grid_databases', `mountains_${db.x}_${db.y}.db`);
+        const database = await open({
+            filename: dbPath,
+            driver: sqlite3.Database
+        });
 
-        // When complete, remove the lock
-        await removeLock(db.name);
-        console.log(`Completed processing ${db.name}`);
+        try {
+            // Process the database
+            await collectHierarchicalPoints(database);
+            console.log(`Completed processing mountains_${db.x}_${db.y}.db`);
+        } finally {
+            await database.close();
+        }
 
     } catch (error) {
         console.error('Error in main:', error);
