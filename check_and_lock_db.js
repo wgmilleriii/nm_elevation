@@ -43,19 +43,58 @@ async function syncLockFiles(retries = 3, delay = 1000) {
     while (attempt < maxRetries) {
         try {
             if (process.platform === 'win32') {
-                // Sync from PC to Pi1 using PowerShell
+                // Sync from PC to Pi1 using scp
                 logSync(`Attempting to sync locks from PC to Pi1 (attempt ${attempt + 1}/${maxRetries})`);
-                const psCommand = `$session = New-PSSession -HostName 10.0.0.68 -UserName pi -KeyFilePath "C:/Users/Wgmil/.ssh/pi_auto_key"; Copy-Item -Path "${LOCK_DIR}/*" -Destination "/home/pi/nm_elevation/locks/" -ToSession $session -Force; Remove-PSSession $session`;
-                execSync(`powershell -Command "${psCommand}"`, {
+                
+                // First ensure the locks directory exists
+                execSync(`ssh -i "C:/Users/Wgmil/.ssh/pi_auto_key" pi@10.0.0.68 "mkdir -p /home/pi/nm_elevation/locks"`, {
                     stdio: 'pipe'
                 });
+
+                // Get list of lock files
+                const lockFiles = fs.readdirSync(LOCK_DIR)
+                    .filter(file => file.endsWith('.lock'))
+                    .map(file => path.join(LOCK_DIR, file));
+
+                if (lockFiles.length === 0) {
+                    logSync('No lock files to sync');
+                    return true;
+                }
+
+                // Copy each lock file individually
+                for (const lockFile of lockFiles) {
+                    execSync(`scp -i "C:/Users/Wgmil/.ssh/pi_auto_key" "${lockFile}" "pi@10.0.0.68:/home/pi/nm_elevation/locks/"`, {
+                        stdio: 'pipe'
+                    });
+                }
+                
                 logSync('Successfully synced locks from PC to Pi1');
             } else {
                 // Sync from Pi to PC using scp
                 logSync(`Attempting to sync locks from Pi to PC (attempt ${attempt + 1}/${maxRetries})`);
-                execSync(`scp -i /home/pi/.ssh/pi_auto_key -r "${LOCK_DIR}/*" "C:/Users/Wgmil/OneDrive/Documents/GitHub/nm_elevation/locks/"`, {
-                    stdio: 'pipe'
-                });
+                
+                // First ensure the locks directory exists
+                if (!fs.existsSync(LOCK_DIR)) {
+                    fs.mkdirSync(LOCK_DIR, { recursive: true });
+                }
+
+                // Get list of lock files
+                const lockFiles = fs.readdirSync(LOCK_DIR)
+                    .filter(file => file.endsWith('.lock'))
+                    .map(file => path.join(LOCK_DIR, file));
+
+                if (lockFiles.length === 0) {
+                    logSync('No lock files to sync');
+                    return true;
+                }
+
+                // Copy each lock file individually
+                for (const lockFile of lockFiles) {
+                    execSync(`scp -i /home/pi/.ssh/pi_auto_key "${lockFile}" "C:/Users/Wgmil/OneDrive/Documents/GitHub/nm_elevation/locks/"`, {
+                        stdio: 'pipe'
+                    });
+                }
+                
                 logSync('Successfully synced locks from Pi to PC');
             }
             return true;
