@@ -4,10 +4,13 @@ let mapPointsLayer;
 let selectedBounds;
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 // Store map points layer
 let mapPointsLayer = null;
 let cachedData = null;
 =======
+=======
+>>>>>>> Stashed changes
 // Add these constants at the top with other globals
 const NM_BOUNDS = {
     north: 37.20,
@@ -116,6 +119,9 @@ function createGridPoints(bounds) {
     
     return points;
 }
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 // Custom circle marker for elevation points
@@ -128,6 +134,7 @@ const ElevationCircle = L.CircleMarker.extend({
 });
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 // --- SVG1: Elevation Points ---
 async function fetchData() {
     if (cachedData) {
@@ -137,6 +144,8 @@ async function fetchData() {
     cachedData = await response.json();
     return cachedData;
 =======
+=======
+>>>>>>> Stashed changes
 // Fetch data from server
 async function fetchData(bounds) {
     const south = bounds.getSouth();
