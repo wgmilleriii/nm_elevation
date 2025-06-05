@@ -4,8 +4,8 @@ node/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package.json
-package-lock.json
+# package.json is now tracked
+# package-lock.json
 
 # Build outputs
 dist/
@@ -44,7 +44,7 @@ cache.js
 *.tif
 *.tiff
 *.TIF
-public/elevation_cache_reduced.json
+# public/elevation_cache_reduced.json is now tracked
 public/elevation_progress.json
 public/elevation_tif.json
 

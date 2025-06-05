@@ -47,8 +47,22 @@ async function checkSyncHealth() {
 
         // Check pi1 databases
         logger.info('Checking pi1 databases...');
-        const pi1CheckCmd = `ssh -i "C:/Users/Wgmil/.ssh/pi_auto_key" pi@${pi1.ip} "ls -l ${config.sync.targetDir}/mountains_*.db"`;
-        const { stdout: pi1Files } = await execAsync(pi1CheckCmd);
+        let pi1Files;
+        if (process.platform === 'linux' && require('os').hostname().includes('pi')) {
+            // We're running on the Pi, check files directly
+            pi1Files = fs.readdirSync(config.sync.targetDir)
+                .filter(file => file.startsWith('mountains_') && file.endsWith('.db'))
+                .map(file => {
+                    const stats = fs.statSync(path.join(config.sync.targetDir, file));
+                    return `${stats.mode} ${stats.size} ${stats.mtime.toLocaleDateString()} ${stats.mtime.toLocaleTimeString()} ${file}`;
+                })
+                .join('\n');
+        } else {
+            // We're running on PC, use SSH
+            const pi1CheckCmd = `ssh -i "C:/Users/Wgmil/.ssh/pi_auto_key" pi@${pi1.ip} "ls -l ${config.sync.targetDir}/mountains_*.db"`;
+            const { stdout } = await execAsync(pi1CheckCmd);
+            pi1Files = stdout;
+        }
         
         for (const gridId of pi1.grids) {
             const fileInfo = pi1Files.split('\n').find(line => line.includes(`mountains_${gridId}.db`));

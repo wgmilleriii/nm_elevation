@@ -386,6 +386,13 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
         return;
     }
 
+    // Check current point count
+    const result = await db.get('SELECT COUNT(*) as count FROM elevation_points');
+    if (result.count >= 10000) {
+        console.log(`Reached 10,000 points, stopping collection.`);
+        return;
+    }
+
     const gridConfig = GRID_LEVELS[level];
     const levelMsg = `Processing grid level ${level + 1} (${level === 0 ? '10x10' : '10 points per cell'} grid) - Direction: ${collectionDirection}`;
     logProgress(levelMsg);
@@ -697,9 +704,24 @@ async function main() {
         });
 
         try {
+            // Check current point count
+            const result = await database.get('SELECT COUNT(*) as count FROM elevation_points');
+            const currentPoints = result.count;
+            
+            if (currentPoints >= 10000) {
+                console.log(`Database mountains_${db.x}_${db.y}.db already has ${currentPoints} points. Moving to next database.`);
+                return;
+            }
+
+            console.log(`Current points: ${currentPoints}, Target: 10000`);
+            
             // Process the database
             await collectHierarchicalPoints(database);
-            console.log(`Completed processing mountains_${db.x}_${db.y}.db`);
+            
+            // Final check
+            const finalResult = await database.get('SELECT COUNT(*) as count FROM elevation_points');
+            console.log(`Completed processing mountains_${db.x}_${db.y}.db. Final point count: ${finalResult.count}`);
+            
         } finally {
             await database.close();
         }

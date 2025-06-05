@@ -7,16 +7,63 @@
     <link rel="stylesheet" href="css/sandia-view.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        .control-group {
+            margin-bottom: 12px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            color: #333;
+        }
+        .control-group input[type="range"] {
+            width: 200px;
+            margin-right: 8px;
+        }
+        .control-group .value {
+            display: inline-block;
+            min-width: 45px;
+            text-align: right;
+            color: #666;
+        }
+        #data-bounds {
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            color: #666;
+        }
+    </style>
 </head>
 <body>
     <div id="controls">
         <div class="control-group">
-            <label for="distance">Distance Layer (miles):</label>
-            <input type="range" id="distance" min="5" max="70" value="5" step="1">
+            <label for="depth">Depth View:</label>
+            <input type="range" id="depth" min="0" max="100" value="54">
+            <span class="value">54%</span>
         </div>
         <div class="control-group">
-            <label for="height">Height Scale:</label>
-            <input type="range" id="height" min="1" max="200" value="100">
+            <label for="camera-height">Camera Height:</label>
+            <input type="range" id="camera-height" min="0" max="100" value="35">
+            <span class="value">35%</span>
+        </div>
+        <div class="control-group">
+            <label for="height-scale">Height Scaling:</label>
+            <input type="range" id="height-scale" min="0" max="100" value="72">
+            <span class="value">72%</span>
+        </div>
+        <div class="control-group">
+            <label for="distance">Distance Layer (miles):</label>
+            <input type="range" id="distance" min="5" max="70" value="5" step="1">
         </div>
         <div class="control-group">
             <label for="opacity">Layer Opacity:</label>
