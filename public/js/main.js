@@ -8,23 +8,54 @@ class App {
         this.tooltip = document.getElementById('tooltip');
         this.mapFrame = document.getElementById('map-frame');
         this.distanceSlider = document.getElementById('distance');
-        this.heightSlider = document.getElementById('height');
+        this.depthSlider = document.getElementById('depth');
+        this.cameraHeightSlider = document.getElementById('camera-height');
+        this.heightScaleSlider = document.getElementById('height-scale');
         this.opacitySlider = document.getElementById('opacity');
         this.currentDistanceSpan = document.getElementById('current-distance');
+        
+        // Set initial values
+        this.depth = 54;
+        this.cameraHeight = 35;
+        this.heightScale = 72;
+        this.distance = 5;
+        this.opacity = 50;
         
         console.log('Initializing visualization and map manager');
         this.visualization = new Visualization(this.svg, this.tooltip);
         this.mapManager = new MapManager(this.mapFrame);
         console.log('MapManager initialized:', this.mapManager);
         
-        this.setupEventListeners();
+        this.initializeEventListeners();
         this.loadElevationData();
     }
 
-    setupEventListeners() {
-        this.distanceSlider.addEventListener('input', () => this.draw());
-        this.heightSlider.addEventListener('input', () => this.draw());
-        this.opacitySlider.addEventListener('input', () => this.draw());
+    initializeEventListeners() {
+        this.distanceSlider.addEventListener('input', (e) => {
+            this.distance = parseInt(e.target.value);
+            this.draw();
+        });
+
+        this.depthSlider.addEventListener('input', (e) => {
+            this.depth = parseInt(e.target.value);
+            this.draw();
+        });
+
+        this.cameraHeightSlider.addEventListener('input', (e) => {
+            this.cameraHeight = parseInt(e.target.value);
+            this.draw();
+        });
+
+        this.heightScaleSlider.addEventListener('input', (e) => {
+            this.heightScale = parseInt(e.target.value);
+            this.draw();
+        });
+
+        this.opacitySlider.addEventListener('input', (e) => {
+            this.opacity = parseInt(e.target.value);
+            this.draw();
+        });
+
         window.addEventListener('resize', () => this.draw());
 
         // Map controls
@@ -40,7 +71,7 @@ class App {
     async loadElevationData() {
         try {
             console.log('Fetching elevation data...');
-            const response = await fetch('elevation_cache_reduced.json');
+            const response = await fetch('data/elevation_cache_reduced.json');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -85,19 +116,28 @@ class App {
             waitForElements();
         } catch (e) {
             console.error('Error loading data:', e);
-            this.svg.innerHTML = `<text x="20" y="40" fill="red">Error loading data: ${e.message}</text>`;
+            this.svg.innerHTML = `
+                <text x="20" y="40" fill="red">Error loading data: ${e.message}</text>
+                <text x="20" y="60" fill="blue">Please ensure elevation_cache_reduced.json exists in the data directory</text>
+            `;
         }
     }
 
     draw() {
-        const targetDistance = parseFloat(this.distanceSlider.value);
-        const opacity = this.opacitySlider.value / 100;
-        const heightScale = this.heightSlider.value / 100;
+        // Update control value displays
+        document.querySelector('#depth + .value').textContent = `${this.depth}%`;
+        document.querySelector('#camera-height + .value').textContent = `${this.cameraHeight}%`;
+        document.querySelector('#height-scale + .value').textContent = `${this.heightScale}%`;
         
-        this.currentDistanceSpan.textContent = targetDistance.toFixed(1);
+        // Calculate visualization parameters
+        const depthFactor = this.depth / 100;
+        const cameraHeightFactor = this.cameraHeight / 100;
+        const heightScaleFactor = this.heightScale / 100;
+        
+        this.currentDistanceSpan.textContent = this.distance.toFixed(1);
         console.log('Drawing with mapManager:', this.mapManager);
-        const pointsDrawn = this.visualization.draw(targetDistance, opacity, heightScale, this.mapManager);
-        console.log(`Drew ${pointsDrawn} points within ${targetDistance} miles`);
+        const pointsDrawn = this.visualization.draw(this.distance, this.opacity / 100, heightScaleFactor, this.mapManager);
+        console.log(`Drew ${pointsDrawn} points within ${this.distance} miles`);
     }
 
     updateBoundsDisplay() {
