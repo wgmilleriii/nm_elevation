@@ -58,21 +58,36 @@ function appendHistoryEntry(entry) {
 async function checkGridCompletion(gridX, gridY, isPi = false) {
     let dbPath;
     if (isPi) {
-        // For Pi, we'll use SSH to check the database
-        const pi1 = config.instances.pi1;
-        const remotePath = path.join(config.sync.targetDir, `mountains_${gridX}_${gridY}.db`);
-        const cmd = `ssh -i "C:/Users/Wgmil/.ssh/pi_auto_key" pi@${pi1.ip} "sqlite3 ${remotePath} 'SELECT COUNT(*) FROM elevation_points'"`;
+        // For Pi, check database directly
+        dbPath = path.join(config.sync.targetDir, `mountains_${gridX}_${gridY}.db`);
         console.log(`Checking Pi database ${gridX},${gridY}...`);
+        
+        if (!fs.existsSync(dbPath)) {
+            console.log(`Pi database ${gridX},${gridY} does not exist`);
+            return {
+                gridX,
+                gridY,
+                exists: false,
+                points: 0,
+                percentComplete: 0
+            };
+        }
+
+        const db = await open({
+            filename: dbPath,
+            driver: sqlite3.Database
+        });
+
         try {
-            const { stdout } = await execAsync(cmd);
-            const count = parseInt(stdout.trim());
-            const percentComplete = (count / EXPECTED_POINTS) * 100;
-            console.log(`Found ${count} points in Pi database ${gridX},${gridY}`);
+            const count = await db.get('SELECT COUNT(*) as count FROM elevation_points');
+            const percentComplete = (count.count / EXPECTED_POINTS) * 100;
+            console.log(`Found ${count.count} points in Pi database ${gridX},${gridY}`);
+            
             return {
                 gridX,
                 gridY,
                 exists: true,
-                points: count,
+                points: count.count,
                 percentComplete: percentComplete.toFixed(2)
             };
         } catch (error) {
@@ -85,6 +100,8 @@ async function checkGridCompletion(gridX, gridY, isPi = false) {
                 percentComplete: 0,
                 error: error.message
             };
+        } finally {
+            await db.close();
         }
     } else {
         // For PC, check local database
