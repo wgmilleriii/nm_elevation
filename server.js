@@ -3,7 +3,11 @@ const path = require('path');
 const app = express();
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 const port = 8020;
+=======
+const port = process.env.NODE_ENV === 'test' ? 3001 : 3000;
+>>>>>>> Stashed changes
 =======
 const port = process.env.NODE_ENV === 'test' ? 3001 : 3000;
 >>>>>>> Stashed changes
@@ -712,6 +716,9 @@ app.listen(port, () => {
     console.log('Current directory:', __dirname);
     console.log('Database exists:', fs.existsSync(path.join(__dirname, process.env.NODE_ENV === 'test' ? 'mountains.test.db' : 'mountains.db')));
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes

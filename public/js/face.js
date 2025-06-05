@@ -5,10 +5,13 @@ let selectedBounds;
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 // Store map points layer
 let mapPointsLayer = null;
 let cachedData = null;
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 // Add these constants at the top with other globals
@@ -120,6 +123,9 @@ function createGridPoints(bounds) {
     return points;
 }
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
@@ -135,6 +141,7 @@ const ElevationCircle = L.CircleMarker.extend({
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 // --- SVG1: Elevation Points ---
 async function fetchData() {
     if (cachedData) {
@@ -144,6 +151,8 @@ async function fetchData() {
     cachedData = await response.json();
     return cachedData;
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 // Fetch data from server
