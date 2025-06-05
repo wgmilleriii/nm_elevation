@@ -11,9 +11,10 @@ const __dirname = path.dirname(__filename);
 const LOCK_DIR = path.join(__dirname, 'locks');
 const DB_DIR = path.join(__dirname, 'grid_databases');
 const LOG_DIR = path.join(__dirname, 'logs');
+const MAC_DIR = path.join(__dirname, 'MAC');
 
 // Create necessary directories
-[LOCK_DIR, DB_DIR, LOG_DIR].forEach(dir => {
+[LOCK_DIR, DB_DIR, LOG_DIR, MAC_DIR].forEach(dir => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
