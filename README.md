@@ -1,53 +1,58 @@
-# New Mexico Elevation Data Collector
+# New Mexico Elevation Visualization
 
-A Node.js application that collects hierarchical elevation data for New Mexico using multiple elevation data APIs.
+This project visualizes elevation data for New Mexico using a combination of static images and interactive maps.
 
 ## Features
 
-- Hierarchical grid-based collection:
-  - Level 1: 10x10 grid (100 points)
-  - Level 2: Each L1 cell → 10x10 grid (1,000 points)
-  - Level 3: Each L2 cell → 10x10 grid (10,000 points)
+1. Static Elevation Image
+   - High-resolution (2000x2000) elevation visualization
+   - Blue to yellow color gradient (blue = low elevation, yellow = high elevation)
+   - Generated from 373,000+ elevation points
+   - Interpolated to fill gaps using nearest neighbor algorithm
 
-- Multiple API Support:
-  - SRTM30m (OpenTopoData)
-  - ASTER30m (OpenTopoData)
-  - Open-Meteo Elevation
-  - Open-Elevation
+2. Interactive Map
+   - OpenStreetMap base layer
+   - 24x24 grid overlay showing elevation data
+   - Rectangle selection tool for detailed area analysis
 
-- Smart API Management:
-  - Round-robin API cycling
-  - API-specific batch sizes
-  - Rate limit handling with exponential backoff
-  - Automatic fallback on API failures
+3. SVG2 View
+   - Shows selected area points in detail
+   - Interactive tooltips with elevation data
+   - Hover effects for better visualization
 
-- Progress Tracking:
-  - SQLite database for storing elevation data
-  - Progress logging with timestamps
-  - Error logging with full stack traces
+## Technical Details
 
-## Installation
+- Python script (`generate_elevation_image.py`) creates the static elevation image
+- Web interface (`face.html`) provides interactive visualization
+- Canvas-based selection tool for area analysis
+- SQLite database stores elevation points
 
-1. Clone the repository:
-```bash
-git clone https://github.com/wgmilleriii/nm_elevation.git
-cd nm_elevation
-```
+## Dependencies
 
-2. Install dependencies:
-```bash
-npm install
-```
+### Python
+- NumPy
+- Pillow (PIL)
+- SciPy (for interpolation)
+- SQLite3
+
+### Web
+- Leaflet.js for mapping
+- HTML5 Canvas for selection
+- Modern browser with JavaScript enabled
 
 ## Usage
 
-Run the script:
-```bash
-node collect_sparse_points.js
-```
+1. Generate elevation image:
+   ```bash
+   python3 generate_elevation_image.py
+   ```
 
-The script will:
-1. Create a SQLite database (`mountains.db`)
-2. Start collecting elevation data in a hierarchical grid pattern
-3. Log progress to `collection_progress.log`
-4. Log errors to `collection_errors.log` 
+2. Open `face.html` in a web browser
+3. Use the rectangle selection tool on the elevation image to analyze specific areas
+4. View detailed elevation data in the map and SVG2 view
+
+## Data Range
+
+- Latitude: 31.20°N to 37.20°N
+- Longitude: 109.20°W to 102.80°W
+- Elevation: 746.0m to 3,932.0m 

@@ -1,0 +1,69 @@
+# New Mexico Elevation Data Collection System - Mac Instructions
+
+## Current System Status
+- Web server running on port 3000
+- Two database files:
+  - mountains.db: Main database (used by web server)
+  - mountains_ne_sw.db: Secondary database for NE to SW collection
+- Database schema documented in SQL/001.sql
+
+## Quick Start
+1. Start the web server:
+   ```bash
+   npm start
+   ```
+2. View the visualization:
+   - Open http://localhost:3000 in your browser
+   - Toggle between high/low resolution using the button
+   - Hover over points to see elevation details
+
+## Data Collection
+Run collection in either direction:
+```bash
+# Northeast to Southwest collection
+npm run start -- --direction=ne_to_sw
+
+# Southwest to Northeast collection
+npm run start -- --direction=sw_to_ne
+```
+
+## Database Operations
+- Database files are in SQLite format
+- Connect using port 3307:
+  ```bash
+  mysql -P 3307 -u root -p
+  # Password: root (or blank)
+  ```
+
+## Merging Data
+To merge NE-SW data into the main database:
+```bash
+node merge_databases.js
+```
+
+## Monitoring
+- Check collection_progress.log for current status
+- View collection_errors.log for any issues
+- Monitor system resources with monitor.sh
+
+## Web Interface Features
+- Interactive elevation visualization
+- Resolution toggle (high/low)
+- Point hover tooltips with detailed information
+- Color gradient from blue (low) to yellow (high)
+
+## Data Statistics
+- Coverage: 31.33°N to 37.00°N, -109.05°W to -103.00°W
+- Elevation range: Varies by collection
+- Total points: See web interface for current count
+
+## Troubleshooting
+1. If web server fails to start:
+   - Check if port 3000 is available
+   - Ensure mountains.db exists and is readable
+2. If collection fails:
+   - Check collection_errors.log
+   - Verify database permissions
+3. If visualization is slow:
+   - Switch to low resolution mode
+   - Clear browser cache 

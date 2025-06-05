@@ -1,0 +1,7 @@
+Page Check Summary - Sun Jun  1 17:11:36 MDT 2025
+URL: http://localhost:3000/face.html
+----------------------------------------
+HTTP Status: < HTTP/1.1 200 OK
+JavaScript Files: 2
+Potential Errors: logs/js_20250601_171133_face.js:4
+logs/js_20250601_171133_leaflet.js:0

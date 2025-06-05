@@ -11,7 +11,10 @@
     <div id="container">
         <div class="row">
             <div id="map"></div>
-            <svg id="svg1" preserveAspectRatio="xMidYMid meet"></svg>
+            <div id="elevation-container">
+                <img id="elevation-img" src="images/elevation.jpg" alt="New Mexico Elevation Map" />
+                <canvas id="selection-canvas" class="overlay"></canvas>
+            </div>
         </div>
         <div class="legend">
             <div class="legend-gradient"></div>
@@ -24,6 +27,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="js/face.js"></script>
+    <script type="module" src="js/face.js"></script>
 </body>
 </html> 
