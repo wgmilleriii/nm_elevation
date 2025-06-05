@@ -7,20 +7,13 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DB_DIR = process.platform === 'win32' 
-    ? 'C:/Users/Wgmil/OneDrive/Documents/GitHub/nm_elevation/grid_databases'
-    : '/home/pi/nm_elevation/grid_databases';
+// Constants
+const LOCK_DIR = path.join(__dirname, 'locks');
+const DB_DIR = path.join(__dirname, 'grid_databases');
+const LOG_DIR = path.join(__dirname, 'logs');
 
-const LOCK_DIR = process.platform === 'win32'
-    ? 'C:/Users/Wgmil/OneDrive/Documents/GitHub/nm_elevation/locks'
-    : '/home/pi/nm_elevation/locks';
-
-const LOG_DIR = process.platform === 'win32'
-    ? 'C:/Users/Wgmil/OneDrive/Documents/GitHub/nm_elevation/logs'
-    : '/home/pi/nm_elevation/logs';
-
-// Create directories if they don't exist
-[LOCK_DIR, LOG_DIR].forEach(dir => {
+// Create necessary directories
+[LOCK_DIR, DB_DIR, LOG_DIR].forEach(dir => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
@@ -163,57 +156,53 @@ async function createLock(dbName) {
     }
 }
 
-async function removeLock(dbName) {
-    const lockFile = path.join(LOCK_DIR, `${dbName}.lock`);
-    if (fs.existsSync(lockFile)) {
+async function removeLock(x, y) {
+    const lockPath = path.join(LOCK_DIR, `mountains_${x}_${y}.lock`);
+    if (fs.existsSync(lockPath)) {
         try {
-            fs.unlinkSync(lockFile);
-            logSync(`Removed lock file for ${dbName}`);
+            fs.unlinkSync(lockPath);
+            logSync(`Removed lock file for mountains_${x}_${y}`);
             
             // Immediately sync the removal with retries
             await syncLockFiles();
-            logSync(`Successfully synced lock removal for ${dbName}`);
+            logSync(`Successfully synced lock removal for mountains_${x}_${y}`);
         } catch (error) {
-            logSync(`Failed to remove/sync lock for ${dbName}: ${error.message}`, 'ERROR');
+            logSync(`Failed to remove/sync lock for mountains_${x}_${y}: ${error.message}`, 'ERROR');
             throw error;
         }
     }
 }
 
-async function findNextDatabase() {
-    const dbs = fs.readdirSync(DB_DIR)
-        .filter(file => file.endsWith('.db'))
-        .map(file => ({
-            name: file,
-            path: path.join(DB_DIR, file)
-        }));
+function findNextDatabase() {
+    const gridSize = 10;
+    let mostIncomplete = null;
+    let lowestCompletion = 1.0; // 100%
 
-    let leastComplete = null;
-    let lowestPercentage = 100;
+    // Check each potential database location
+    for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+            const dbPath = path.join(DB_DIR, `mountains_${i}_${j}.db`);
+            const lockPath = path.join(LOCK_DIR, `mountains_${i}_${j}.lock`);
 
-    for (const db of dbs) {
-        if (isLocked(db.name)) {
-            console.log(`${db.name} is locked, skipping...`);
-            continue;
-        }
-
-        try {
-            const percentage = await getCompletionPercentage(db.path);
-            console.log(`${db.name} is ${percentage.toFixed(2)}% complete`);
-            
-            if (percentage < lowestPercentage) {
-                lowestPercentage = percentage;
-                leastComplete = db;
+            // Skip if locked
+            if (fs.existsSync(lockPath)) {
+                continue;
             }
-        } catch (err) {
-            console.error(`Error checking ${db.name}:`, err);
-        }
-    }
 
-    if (leastComplete) {
-        createLock(leastComplete.name);
-        console.log(`Locked ${leastComplete.name} for processing`);
-        return leastComplete;
+            // If database doesn't exist, this is our target
+            if (!fs.existsSync(dbPath)) {
+                return { x: i, y: j, points: 0, completion: 0 };
+            }
+
+            try {
+                // Create lock file
+                fs.writeFileSync(lockPath, new Date().toISOString());
+                return { x: i, y: j };
+            } catch (error) {
+                console.error(`Error creating lock for ${i},${j}:`, error);
+                continue;
+            }
+        }
     }
 
     return null;

@@ -1,27 +1,50 @@
 #!/bin/bash
 
+# Pi configuration
+PI_IP="10.0.0.68"
+PI_USER="raspberry"
+PI_PATH="/home/pi/nm_elevation"
+
 # Files to transfer
 FILES=(
+    "package.json"
+    "package-lock.json"
     "config.json"
-    "sync_databases.js"
-    "setup_sync.sh"
     "collect_sparse_points.js"
+    "check_and_lock_db.js"
     "check_completion.js"
+    "check_grid.js"
+    "check_schema.js"
+    "sync_databases.js"
+    "merge_databases.js"
+    "update_schema.js"
+    "sync_data.sh"
 )
 
-# Make setup script executable
-chmod +x setup_sync.sh
+# Create necessary directories on Pi
+echo "Creating directories on Pi ($PI_IP)..."
+ssh ${PI_USER}@${PI_IP} "mkdir -p ${PI_PATH}/{grid_databases,logs,locks,PI}"
 
-# Transfer files to pi1
-echo "Transferring files to pi1..."
+# Make scripts executable locally
+chmod +x sync_data.sh
+
+# Transfer files to Pi
+echo "Transferring files to Pi ($PI_IP)..."
 for file in "${FILES[@]}"; do
-    scp "$file" pi@10.0.0.68:/home/pi/nm_elevation/
+    echo "Copying $file..."
+    scp "$file" ${PI_USER}@${PI_IP}:${PI_PATH}/
 done
 
-# Execute setup on pi1
-echo "Running setup on pi1..."
-ssh pi@10.0.0.68 "cd /home/pi/nm_elevation && chmod +x setup_sync.sh && ./setup_sync.sh"
+# Transfer any existing databases
+echo "Transferring grid databases..."
+scp -r grid_databases/* ${PI_USER}@${PI_IP}:${PI_PATH}/grid_databases/
 
-echo "Deployment complete! Check status on pi1 with:"
-echo "ssh pi@10.0.0.68 'sudo systemctl status nm-elevation-sync'"
-echo "ssh pi@10.0.0.68 'sudo systemctl status nm-elevation-backup.timer'" 
+# Setup on Pi
+echo "Setting up on Pi..."
+ssh ${PI_USER}@${PI_IP} "cd ${PI_PATH} && npm install && chmod +x sync_data.sh"
+
+echo "Deployment complete!"
+echo "To start collection on Pi:"
+echo "ssh ${PI_USER}@${PI_IP} 'cd ${PI_PATH} && npm start'"
+echo "To monitor progress:"
+echo "ssh ${PI_USER}@${PI_IP} 'cd ${PI_PATH} && node check_completion.js'" 

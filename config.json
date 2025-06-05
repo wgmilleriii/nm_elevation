@@ -1,4 +1,30 @@
 {
+    "environments": {
+        "mac": {
+            "dataPath": "./MAC",
+            "gridDatabasePath": "./grid_databases",
+            "syncPartners": ["pi", "pc"]
+        },
+        "pi": {
+            "dataPath": "./PI",
+            "gridDatabasePath": "./grid_databases",
+            "hostname": "pi1.local",
+            "username": "raspberry",
+            "password": "pi"
+        },
+        "pc": {
+            "dataPath": "./PC",
+            "gridDatabasePath": "./grid_databases"
+        }
+    },
+    "collection": {
+        "batchSize": 25,
+        "delayMs": 2000,
+        "maxRetries": 3
+    },
+    "database": {
+        "filename": "mountains.db"
+    },
     "instances": {
         "pc": {
             "id": "pc",
