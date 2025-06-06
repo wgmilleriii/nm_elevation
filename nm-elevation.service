@@ -1,0 +1,17 @@
+[Unit]
+Description=New Mexico Elevation Data Collection Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=raspberry
+WorkingDirectory=/home/raspberry/projects/nm_elevation
+ExecStart=/home/raspberry/projects/nm_elevation/collect_service.sh
+Restart=always
+RestartSec=300
+StandardOutput=append:/home/raspberry/projects/nm_elevation/collection.log
+StandardError=append:/home/raspberry/projects/nm_elevation/collection.log
+
+[Install]
+WantedBy=multi-user.target 

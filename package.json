@@ -1,18 +1,16 @@
 {
   "name": "nm-elevation",
   "version": "1.0.0",
-  "description": "New Mexico Elevation Visualization",
-  "main": "server.js",
   "type": "module",
+  "description": "New Mexico elevation data collection",
+  "main": "collect_sparse_points.js",
   "scripts": {
     "start": "node collect_sparse_points.js",
-    "sync-to-pi": "node sync_databases.js",
-    "sync-from-pi": "node sync_data.sh"
+    "sync-to-pi": "node sync_to_pi.js",
+    "sync-from-pi": "node sync_from_pi.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "node-fetch": "^3.3.0",
-    "sqlite": "^4.1.2",
-    "sqlite3": "^5.1.2"
+    "better-sqlite3": "^8.7.0",
+    "node-fetch": "^3.3.0"
   }
 }

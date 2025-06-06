@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
@@ -117,7 +117,7 @@ async function syncLockFiles(retries = 3, delay = 1000) {
 
 function getCompletionPercentage(dbPath) {
     return new Promise((resolve, reject) => {
-        const db = new sqlite3.Database(dbPath);
+        const db = new Database(dbPath);
         db.get("SELECT COUNT(*) as count FROM elevation_points", (err, row) => {
             db.close();
             if (err) {
@@ -232,4 +232,70 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             console.error('Error:', err);
             process.exit(1);
         });
+}
+
+export function checkAndLockDb(dbPath) {
+    const lockFile = path.join(LOCK_DIR, path.basename(dbPath) + '.lock');
+    
+    try {
+        // Check if database exists, if not create it
+        if (!fs.existsSync(dbPath)) {
+            const db = new Database(dbPath);
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS points (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    lat REAL NOT NULL,
+                    lon REAL NOT NULL,
+                    elevation REAL,
+                    source TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS idx_lat_lon ON points(lat, lon);
+            `);
+            db.close();
+        }
+
+        // Try to acquire lock
+        fs.writeFileSync(lockFile, process.pid.toString(), { flag: 'wx' });
+        return true;
+    } catch (err) {
+        if (err.code === 'EEXIST') {
+            try {
+                // Check if process holding lock is still alive
+                const pid = parseInt(fs.readFileSync(lockFile, 'utf8'));
+                try {
+                    process.kill(pid, 0);
+                    return false; // Process is still alive, lock is valid
+                } catch (e) {
+                    // Process is dead, remove stale lock
+                    fs.unlinkSync(lockFile);
+                    // Try to acquire lock again
+                    return checkAndLockDb(dbPath);
+                }
+            } catch (e) {
+                // Error reading lock file, assume it's stale
+                try {
+                    fs.unlinkSync(lockFile);
+                    return checkAndLockDb(dbPath);
+                } catch (e) {
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+}
+
+export function unlockDb(dbPath) {
+    const lockFile = path.join(LOCK_DIR, path.basename(dbPath) + '.lock');
+    try {
+        fs.unlinkSync(lockFile);
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+export function getDb(dbPath) {
+    return new Database(dbPath);
 } 
