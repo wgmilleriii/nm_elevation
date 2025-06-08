@@ -10,19 +10,19 @@ const NM_CITIES = [
         name: "Las Cruces",
         lat: 32.3199,
         lon: -106.7637,
-        population: 111385
+        population: 103432
     },
     {
         name: "Rio Rancho",
         lat: 35.2328,
         lon: -106.6630,
-        population: 104046
+        population: 96159
     },
     {
         name: "Santa Fe",
         lat: 35.6870,
         lon: -105.9378,
-        population: 87505
+        population: 84683
     },
     {
         name: "Roswell",
@@ -46,7 +46,7 @@ const NM_CITIES = [
         name: "Hobbs",
         lat: 32.7026,
         lon: -103.1360,
-        population: 39141
+        population: 38143
     },
     {
         name: "Alamogordo",
@@ -58,7 +58,7 @@ const NM_CITIES = [
         name: "Carlsbad",
         lat: 32.4207,
         lon: -104.2288,
-        population: 32238
+        population: 29158
     }
 ];
 

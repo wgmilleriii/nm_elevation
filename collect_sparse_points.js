@@ -379,67 +379,8 @@ async function fetchElevations(points, api) {
     }
 }
 
-// Add enhanced database logging functions
-function logDatabaseStatus(dbPath, message, details = {}) {
-    const timestamp = new Date().toISOString();
-    const dbName = path.basename(dbPath);
-    const detailsStr = Object.entries(details)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join(', ');
-    
-    const logEntry = `${timestamp} - DB [${dbName}] - ${message} ${detailsStr ? `(${detailsStr})` : ''}\n`;
-    fs.appendFileSync('collection_progress.log', logEntry);
-    console.log(`DB: ${message} ${detailsStr ? `(${detailsStr})` : ''}`);
-}
-
-function logSourceDistribution(db, dbPath) {
-    const sources = db.prepare(`
-        SELECT source, COUNT(*) as count 
-        FROM points 
-        GROUP BY source
-    `).all();
-    
-    const total = sources.reduce((sum, src) => sum + src.count, 0);
-    const distribution = sources.map(src => ({
-        source: src.source,
-        count: src.count,
-        percentage: ((src.count / total) * 100).toFixed(2)
-    }));
-    
-    logDatabaseStatus(dbPath, 'Source Distribution', {
-        total,
-        distribution: JSON.stringify(distribution)
-    });
-}
-
-// Modify saveBatch to include logging
-async function saveBatch(db, points, dbPath) {
-    const stmt = db.prepare('INSERT INTO points (lat, lon, elevation, source) VALUES (?, ?, ?, ?)');
-    
-    const transaction = db.transaction((points) => {
-        for (const point of points) {
-            stmt.run(point.lat, point.lon, point.elevation, point.source);
-        }
-    });
-    
-    transaction(points);
-    
-    // Log the batch save
-    const sourceCounts = points.reduce((acc, p) => {
-        acc[p.source] = (acc[p.source] || 0) + 1;
-        return acc;
-    }, {});
-    
-    logDatabaseStatus(dbPath, 'Saved batch', {
-        points: points.length,
-        sourceCounts: JSON.stringify(sourceCounts)
-    });
-}
-
-// Modify collectHierarchicalPoints to include database logging
+// Modify collectHierarchicalPoints to handle different directions
 async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS, parentI = 0, parentJ = 0) {
-    const dbPath = db.name; // SQLite database filename
-
     if (level >= GRID_LEVELS.length) {
         return;
     }

@@ -10,23 +10,28 @@
 <body>
     <div id="container">
         <div class="row">
-            <div id="map"></div>
-            <div id="elevation-container">
-                <img id="elevation-img" src="images/elevation.jpg" alt="New Mexico Elevation Map" />
-                <canvas id="selection-canvas" class="overlay"></canvas>
+            <!-- Map Section -->
+            <div id="map">
+                <canvas id="selection-canvas" style="position: absolute; top: 0; left: 0; z-index: 1000; pointer-events: none;"></canvas>
             </div>
-        </div>
-        <div class="legend">
-            <div class="legend-gradient"></div>
-            <span>Low → High Elevation</span>
-        </div>
-        <div id="stats"></div>
-        <div class="row">
-            <svg id="svg2"></svg>
+            <!-- SVG Section -->
+            <div id="svg-container">
+                <svg id="svg1"></svg>
+                <div class="loading">Loading elevation data...</div>
+                <div class="elevation-gradient">
+                    <div class="elevation-gradient-labels">
+                        <span class="min-elevation">0m</span>
+                        <span class="max-elevation">4000m</span>
+                    </div>
+                </div>
+                <div class="tooltip"></div>
+            </div>
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <script type="module" src="js/face.js"></script>
 </body>
 </html> 

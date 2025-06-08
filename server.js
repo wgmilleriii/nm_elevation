@@ -1,47 +1,71 @@
-const express = require('express');
-const path = require('path');
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import { spawn } from 'child_process';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-const port = 8020;
-=======
 const port = process.env.NODE_ENV === 'test' ? 3001 : 3000;
->>>>>>> Stashed changes
-=======
-const port = process.env.NODE_ENV === 'test' ? 3001 : 3000;
->>>>>>> Stashed changes
-=======
-const port = process.env.NODE_ENV === 'test' ? 3001 : 3000;
->>>>>>> Stashed changes
 
-// Serve static files from the public directory
+// Middleware
 app.use(express.static('public'));
-<<<<<<< Updated upstream
+app.use(express.json());
 
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-=======
-app.use(express.json());  // Add JSON body parser
-app.use(express.urlencoded({ extended: true }));  // Add URL-encoded parser
+// Ensure logs directory exists
+const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+}
+
+// Logging endpoint
+app.post('/api/log', (req, res) => {
+    const { timestamp, logger, level, message, data, error } = req.body;
+    const logFile = path.join(logsDir, `${logger.toLowerCase()}.log`);
+    
+    let logEntry = `[${timestamp}] ${level === 'error' ? 'ERROR: ' : ''}${message}\n`;
+    if (data) {
+        logEntry += JSON.stringify(data, null, 2) + '\n';
+    }
+    if (error) {
+        logEntry += error + '\n';
+    }
+    
+    try {
+        fs.appendFileSync(logFile, logEntry + '\n');
+        res.sendStatus(200);
+    } catch (err) {
+        console.error('Error writing to log file:', err);
+        res.status(500).json({ error: 'Failed to write log entry' });
+    }
+});
 
 // Initialize database connection
 async function getDb() {
-    const dbPath = process.env.NODE_ENV === 'test' 
-        ? path.join(__dirname, 'mountains.test.db')
-        : path.join(__dirname, 'mountains.db');
-    
-    // Check if database exists
-    if (!fs.existsSync(dbPath)) {
-        console.error('Database file not found:', dbPath);
-        throw new Error('Database file not found');
+    try {
+        const dbPath = process.env.NODE_ENV === 'test' 
+            ? path.join(__dirname, 'mountains.test.db')
+            : path.join(__dirname, 'mountains.db');
+        
+        // Check if database exists
+        if (!fs.existsSync(dbPath)) {
+            console.error('Database file not found:', dbPath);
+            throw new Error('Database file not found');
+        }
+        
+        console.log('Opening database at:', dbPath);
+        return await open({
+            filename: dbPath,
+            driver: sqlite3.Database
+        });
+    } catch (error) {
+        console.error('Error initializing database:', error);
+        throw error;
     }
-    
-    console.log('Opening database at:', dbPath);
-    return open({
-        filename: dbPath,
-        driver: sqlite3.Database
-    });
 }
 
 app.get('/api/elevation-data', async (req, res) => {
@@ -711,15 +735,81 @@ app.post('/api/enhance-region', async (req, res) => {
     }
 });
 
+// Add collect_sparse endpoint
+app.post('/api/collect_sparse', async (req, res) => {
+    try {
+        const { center, size, direction } = req.body;
+        
+        if (!center || !size || !direction) {
+            return res.status(400).json({
+                error: 'Missing required parameters: center (lat, lon), size, direction (x, y)'
+            });
+        }
+
+        // Validate coordinates
+        if (!validateCoordinates(center.lat, center.lon)) {
+            return res.status(400).json({
+                error: 'Invalid coordinates'
+            });
+        }
+
+        // Calculate window bounds
+        const bounds = {
+            minLat: center.lat - size/2,
+            maxLat: center.lat + size/2,
+            minLon: center.lon - size/2,
+            maxLon: center.lon + size/2
+        };
+
+        const db = await getDb();
+        
+        // Get points in the window
+        const query = `
+            SELECT latitude, longitude, elevation
+            FROM elevation_points
+            WHERE latitude BETWEEN ? AND ?
+            AND longitude BETWEEN ? AND ?
+            ORDER BY 
+                (latitude - ?) * ? + (longitude - ?) * ? DESC
+            LIMIT 100
+        `;
+
+        const points = await db.all(query, [
+            bounds.minLat,
+            bounds.maxLat,
+            bounds.minLon,
+            bounds.maxLon,
+            center.lat,
+            direction.y,
+            center.lon,
+            direction.x
+        ]);
+
+        // Transform points for response
+        const transformedPoints = points.map(p => ({
+            lat: p.latitude,
+            lon: p.longitude,
+            elevation: p.elevation
+        }));
+
+        res.json({
+            center,
+            size,
+            direction,
+            points: transformedPoints
+        });
+
+    } catch (error) {
+        console.error('Error in collect_sparse:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message
+        });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
     console.log('Current directory:', __dirname);
     console.log('Database exists:', fs.existsSync(path.join(__dirname, process.env.NODE_ENV === 'test' ? 'mountains.test.db' : 'mountains.db')));
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 }); 
