@@ -199,4 +199,63 @@ body {
 .elevation-control.elevation .mouse-focus-line {
     stroke: #444;
     stroke-width: 1;
+}
+
+.map-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 4px;
+    padding: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.control-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.control-button:hover {
+    background: #45a049;
+}
+
+.control-button:active {
+    background: #3d8b40;
+}
+
+.control-button.gathering {
+    background: #ff9800;
+    cursor: wait;
+}
+
+.button-status {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4CAF50;
+    transition: background-color 0.2s;
+}
+
+.gathering .button-status {
+    background: #ff9800;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
 } 
