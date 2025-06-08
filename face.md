@@ -1,37 +1,20 @@
-FACE.html.md
+FACE.md
 
-this is how face.html should work:
+UI requirements:
+web page shows a map
+and then an svg1 below the map
+page evenly divded into two
+svg should load data from local database and mirror the clicks of the map
+so in memory will reside 3d elevation data lon/lat/ele
+svg should be updated based on data in memory and as map moves
+ on load, load into memory gps info for 10 major cities
+ zoom map to see santa fe to las cruses
+ 
+ update SVG1:
+ - draw text markers and circles on the top 10 cities
+ - use the local databases to start querying data gradually
+ - here's the hard part: I want a true elevation map showing circles and rings like a true topographical map
+ - in order to verify the topographie's accuracy, I need another layer in the SVG that are the standard circles in the blue->yellow gradient to show height. This part should be easy, and it should be easy to zoom into a region on the MAP, and have that translate to a data call to the collect_sparse
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-the map should load with an initial view of new mexico.
-SVG1 should be rendered with data from the db, just like the current page http://localhost:3000/index_original.html but without anything else (just draw the SVG and the map).
-SVG1 should be populated with 1/10 of the data (making a low res version)
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-COMPLETED STEPS
-==============
-1. load the map and JPG (used to be a SVG with circles). now, use canvas or something else that we can draw on.
-2. user draws a rectangle on JPG.
+ For the first launch, let's get this all running locally and then we will move it to the PI and focus on collecting data directly from the PI
 
-
-
-CHANGE FUNCTIONALITY
-3. Map gets populated with a 24x24 grid of circles.
-
-INCOMPLETE STEPS
-================
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-4. SVG2 is populated with the same circles as map.
->>>>>>> Stashed changes
-=======
-4. SVG2 is populated with the same circles as map.
->>>>>>> Stashed changes
-=======
-4. SVG2 is populated with the same circles as map.
->>>>>>> Stashed changes

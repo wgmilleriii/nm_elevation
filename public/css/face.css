@@ -6,6 +6,7 @@ body {
 }
 
 #container {
+    width: 100%;
     max-width: 1200px;
     margin: 0 auto;
     background: white;
@@ -14,48 +15,120 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.row {
-    display: flex;
+#map {
     width: 100%;
+    height: 400px;
+    border: 1px solid #ddd;
+    background: white;
     margin-bottom: 20px;
 }
 
-#map {
-    width: 35%;
-    height: 800px;
+#svg-container {
+    width: 100%;
+    height: 400px;
     border: 1px solid #ddd;
     background: white;
-}
-
-#elevation-container {
+    margin-bottom: 20px;
     position: relative;
-    width: 65%;
-    height: 800px;
-    border: 1px solid #ddd;
-    background: white;
-    overflow: hidden;
 }
 
-#elevation-img {
+#svg1 {
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    background: #f5f5f5;
 }
 
-#selection-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: all;
-}
-
-#svg2 {
+#elevation-profile {
     width: 100%;
     height: 200px;
-    background: #fafafa;
+    margin-top: 20px;
     border: 1px solid #ddd;
+    background: white;
+}
+
+.city-marker {
+    fill: #ff4444;
+    stroke: white;
+    stroke-width: 2;
+    cursor: pointer;
+    transition: r 0.2s ease;
+}
+
+.city-marker:hover {
+    fill: #ff6666;
+}
+
+.city-label-bg {
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    stroke: white;
+    stroke-width: 3;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    paint-order: stroke;
+    pointer-events: none;
+}
+
+.city-label {
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    fill: #333;
+    pointer-events: none;
+}
+
+.elevation-ring {
+    fill: none;
+    stroke-width: 1;
+    opacity: 0.6;
+}
+
+.elevation-gradient {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 200px;
+    height: 20px;
+    background: linear-gradient(to right, #0000ff, #ffff00);
+    border: 1px solid #ccc;
+}
+
+.elevation-gradient-labels {
+    display: flex;
+    justify-content: space-between;
+    width: 200px;
+    font-size: 12px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.tooltip {
+    position: absolute;
+    background: white;
+    border: 1px solid #ccc;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    pointer-events: none;
+    display: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+
+/* Loading indicator */
+.loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.9);
+    padding: 10px 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    display: none;
+}
+
+.loading.active {
+    display: block;
 }
 
 .point {
@@ -76,7 +149,7 @@ body {
 .legend {
     display: flex;
     align-items: center;
-    margin-top: 10px;
+    margin: 10px 0;
 }
 
 .legend-gradient {
@@ -86,12 +159,44 @@ body {
     background: linear-gradient(to right, #0000ff, #ffff00);
 }
 
-.tooltip {
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 5px 10px;
+.elevation-point {
+    transition: r 0.2s ease;
+}
+
+.elevation-point:hover {
+    r: 4;
+    stroke: white;
+    stroke-width: 1;
+}
+
+.legend-label {
+    font-family: Arial, sans-serif;
+    font-size: 10px;
+    fill: #666;
+}
+
+/* Leaflet elevation control styles */
+.elevation-control.elevation .background {
+    background: white;
+}
+
+.elevation-control.elevation .area {
+    fill: #4682b4;
+    fill-opacity: 0.3;
+}
+
+.elevation-control.elevation .ruler {
+    color: #444;
+}
+
+.elevation-control.elevation .mouse-focus-label {
+    background: white;
     border-radius: 4px;
-    font-size: 12px;
-    pointer-events: none;
-    z-index: 1000;
+    padding: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.elevation-control.elevation .mouse-focus-line {
+    stroke: #444;
+    stroke-width: 1;
 } 

@@ -4,6 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>New Mexico Elevation Visualization</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Load scripts in correct order with defer -->
+    <script defer src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+    <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Our custom files -->
+    <link rel="stylesheet" href="css/face.css" />
+    <script defer type="module" src="js/cities.js"></script>
+    <script defer type="module" src="js/logger.js"></script>
+    <script defer type="module" src="js/svgUtils.js"></script>
+    <script defer type="module" src="js/face.js"></script>
+    
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -21,9 +36,17 @@
         }
         #visualization {
             width: 100%;
-            height: 800px;
+            height: 400px;
             border: 1px solid #ddd;
             background: white;
+            margin-bottom: 20px;
+        }
+        #map {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #ddd;
+            background: white;
+            margin-bottom: 20px;
         }
         .point {
             transition: r 0.2s;
@@ -71,11 +94,22 @@
             <div class="legend-gradient"></div>
             <span>Low → High Elevation</span>
         </div>
+        <div id="map"></div>
         <svg id="visualization" preserveAspectRatio="xMidYMid meet"></svg>
         <div id="stats"></div>
     </div>
     
     <script>
+        // Ensure Leaflet is loaded before initializing
+        window.addEventListener('load', () => {
+            if (!window.L) {
+                console.error('Leaflet not loaded properly');
+                return;
+            }
+            // Initialize visualization
+            visualizeData();
+        });
+
         let currentResolution = 'high';
 
         async function fetchData() {
@@ -144,9 +178,6 @@
                 Resolution: ${stats.resolution}
             `;
         }
-
-        // Initialize visualization
-        visualizeData();
     </script>
 </body>
 </html> 
