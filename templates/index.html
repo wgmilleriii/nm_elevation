@@ -103,22 +103,61 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container mt-4">
         <h1>New Mexico Elevation Map Generator</h1>
         
-        <div class="map-container">
-            <div id="map"></div>
-            <div class="map-controls">
-                <button id="generateBtn" disabled>Generate Map for Selection</button>
+        <!-- GPS Coordinates Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Generate Custom Map</h5>
+            </div>
+            <div class="card-body">
+                <form id="gpsForm" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="north" class="form-label">North Latitude</label>
+                        <input type="number" step="0.000001" class="form-control" id="north" value="35.3">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="south" class="form-label">South Latitude</label>
+                        <input type="number" step="0.000001" class="form-control" id="south" value="35.0">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="east" class="form-label">East Longitude</label>
+                        <input type="number" step="0.000001" class="form-control" id="east" value="-106.4">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="west" class="form-label">West Longitude</label>
+                        <input type="number" step="0.000001" class="form-control" id="west" value="-106.7">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Generate Map</button>
+                    </div>
+                </form>
             </div>
         </div>
 
-        <div class="form-group">
-            <label for="colorMode">Color Mode:</label>
-            <select id="colorMode">
-                <option value="bw">Black and White</option>
-                <option value="color">Color</option>
-            </select>
+        <!-- Map Display -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Color Map</h5>
+                    </div>
+                    <div class="card-body">
+                        <img id="colorMap" src="" class="img-fluid" alt="Color Contour Map">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Black & White Map</h5>
+                    </div>
+                    <div class="card-body">
+                        <img id="bwMap" src="" class="img-fluid" alt="B&W Contour Map">
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -269,6 +308,33 @@
                     });
             } else {
                 console.log('No selection box found');
+            }
+        });
+
+        document.getElementById('gpsForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const params = new URLSearchParams({
+                north: document.getElementById('north').value,
+                south: document.getElementById('south').value,
+                east: document.getElementById('east').value,
+                west: document.getElementById('west').value
+            });
+            
+            try {
+                const response = await fetch(`/generate_map?${params}`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Update map images
+                    const timestamp = data.timestamp;
+                    document.getElementById('colorMap').src = `/static/public/images/contour_map_color_${timestamp}.png`;
+                    document.getElementById('bwMap').src = `/static/public/images/contour_map_bw_${timestamp}.png`;
+                } else {
+                    alert('Error generating map: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
             }
         });
     </script>

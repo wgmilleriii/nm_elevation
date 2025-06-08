@@ -29,28 +29,44 @@ def home():
     print(f"\nFound {len(maps)} maps")
     return render_template('index.html', maps=maps)
 
-@app.route('/generate_map', methods=['POST'])
+@app.route('/generate_map', methods=['GET'])
 def generate_map():
-    # Get parameters from form
-    num_contours = int(request.form.get('num_contours', 30))
-    line_width = float(request.form.get('line_width', 0.5))
-    show_cities = request.form.get('show_cities') == 'true'
-    color_mode = request.form.get('color_mode', 'bw')
-    
-    # Generate the map
-    points = get_elevation_data()
-    
-    # Create the map with parameters
-    output_file = create_contour_map(
-        points,
-        num_contours=num_contours,
-        line_width=line_width,
-        show_cities=show_cities,
-        color_mode=color_mode
-    )
-    
-    # Return the generated image
-    return jsonify({'success': True, 'file': output_file})
+    try:
+        # Get parameters from request
+        north = float(request.args.get('north', 35.3))
+        south = float(request.args.get('south', 35.0))
+        east = float(request.args.get('east', -106.4))
+        west = float(request.args.get('west', -106.7))
+        color_mode = request.args.get('color_mode', 'color')
+        
+        # Generate timestamp for unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Generate the map
+        bounds = {
+            'minLat': south,
+            'maxLat': north,
+            'minLon': west,
+            'maxLon': east
+        }
+        
+        # Generate both color and BW versions
+        generate_contour_map(bounds=bounds, color_mode='color')
+        generate_contour_map(bounds=bounds, color_mode='bw')
+        
+        # Return success response
+        return jsonify({
+            'status': 'success',
+            'message': 'Map generated successfully',
+            'timestamp': timestamp,
+            'bounds': bounds
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/get_map')
 def get_map():
