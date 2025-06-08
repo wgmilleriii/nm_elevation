@@ -131,9 +131,25 @@ function getCompletionPercentage(dbPath) {
     });
 }
 
+function isLockStale(lockFile) {
+    try {
+        const contents = fs.readFileSync(lockFile, 'utf8').split('\n');
+        if (contents.length !== 2) return true;  // Invalid format
+        
+        const lockTime = new Date(contents[1]);
+        const now = new Date();
+        const staleDuration = 1000 * 60 * 60;  // 1 hour
+        
+        return (now - lockTime) > staleDuration;
+    } catch (error) {
+        logSync(`Error checking lock staleness: ${error.message}`, 'ERROR');
+        return true;  // If we can't read the lock, consider it stale
+    }
+}
+
 function isLocked(dbName) {
     const lockFile = path.join(LOCK_DIR, `${dbName}.lock`);
-    return fs.existsSync(lockFile);
+    return fs.existsSync(lockFile) && !isLockStale(lockFile);
 }
 
 async function createLock(dbName) {
@@ -185,9 +201,20 @@ function findNextDatabase() {
             const dbPath = path.join(DB_DIR, `mountains_${i}_${j}.db`);
             const lockPath = path.join(LOCK_DIR, `mountains_${i}_${j}.lock`);
 
-            // Skip if locked
+            // Check if locked and not stale
             if (fs.existsSync(lockPath)) {
-                continue;
+                if (isLockStale(lockPath)) {
+                    // Remove stale lock
+                    try {
+                        fs.unlinkSync(lockPath);
+                        logSync(`Removed stale lock for mountains_${i}_${j}`);
+                    } catch (error) {
+                        logSync(`Failed to remove stale lock for mountains_${i}_${j}: ${error.message}`, 'ERROR');
+                        continue;
+                    }
+                } else {
+                    continue;  // Skip if lock is valid
+                }
             }
 
             // If database doesn't exist, this is our target
@@ -197,7 +224,7 @@ function findNextDatabase() {
 
             try {
                 // Create lock file
-                fs.writeFileSync(lockPath, new Date().toISOString());
+                fs.writeFileSync(lockPath, `${process.platform === 'win32' ? 'PC' : require('os').hostname()}\n${new Date().toISOString()}`);
                 return { x: i, y: j };
             } catch (error) {
                 console.error(`Error creating lock for ${i},${j}:`, error);

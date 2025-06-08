@@ -379,16 +379,82 @@ async function fetchElevations(points, api) {
     }
 }
 
-// Modify collectHierarchicalPoints to handle different directions
+// Add enhanced database logging functions
+function logDatabaseStatus(dbPath, message, details = {}) {
+    const timestamp = new Date().toISOString();
+    const dbName = path.basename(dbPath);
+    const detailsStr = Object.entries(details)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ');
+    
+    const logEntry = `${timestamp} - DB [${dbName}] - ${message} ${detailsStr ? `(${detailsStr})` : ''}\n`;
+    fs.appendFileSync('collection_progress.log', logEntry);
+    console.log(`DB: ${message} ${detailsStr ? `(${detailsStr})` : ''}`);
+}
+
+function logSourceDistribution(db, dbPath) {
+    const sources = db.prepare(`
+        SELECT source, COUNT(*) as count 
+        FROM points 
+        GROUP BY source
+    `).all();
+    
+    const total = sources.reduce((sum, src) => sum + src.count, 0);
+    const distribution = sources.map(src => ({
+        source: src.source,
+        count: src.count,
+        percentage: ((src.count / total) * 100).toFixed(2)
+    }));
+    
+    logDatabaseStatus(dbPath, 'Source Distribution', {
+        total,
+        distribution: JSON.stringify(distribution)
+    });
+}
+
+// Modify saveBatch to include logging
+async function saveBatch(db, points, dbPath) {
+    const stmt = db.prepare('INSERT INTO points (lat, lon, elevation, source) VALUES (?, ?, ?, ?)');
+    
+    const transaction = db.transaction((points) => {
+        for (const point of points) {
+            stmt.run(point.lat, point.lon, point.elevation, point.source);
+        }
+    });
+    
+    transaction(points);
+    
+    // Log the batch save
+    const sourceCounts = points.reduce((acc, p) => {
+        acc[p.source] = (acc[p.source] || 0) + 1;
+        return acc;
+    }, {});
+    
+    logDatabaseStatus(dbPath, 'Saved batch', {
+        points: points.length,
+        sourceCounts: JSON.stringify(sourceCounts)
+    });
+}
+
+// Modify collectHierarchicalPoints to include database logging
 async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS, parentI = 0, parentJ = 0) {
+    const dbPath = db.name; // SQLite database filename
+
     if (level >= GRID_LEVELS.length) {
         return;
     }
 
     // Check current point count
     const result = db.prepare('SELECT COUNT(*) as count FROM points').get();
+    logDatabaseStatus(dbPath, `Level ${level} check`, {
+        currentPoints: result.count,
+        remaining: 10000 - result.count
+    });
+
     if (result.count >= 10000) {
-        console.log(`Reached 10,000 points, stopping collection.`);
+        logDatabaseStatus(dbPath, 'Collection complete', {
+            points: result.count
+        });
         return;
     }
 
@@ -435,13 +501,23 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
 
             if (currentBatch.length >= MAX_BATCH_SIZE) {
                 try {
-                    logProgress(`Processing batch ${processed + 1}-${processed + currentBatch.length} of level ${level + 1}`);
+                    logDatabaseStatus(dbPath, `Processing batch at level ${level}`, {
+                        batchSize: currentBatch.length,
+                        processed: processed
+                    });
+                    
                     const newPoints = await processBatch(currentBatch);
-                    saveBatch(db, newPoints);
+                    await saveBatch(db, newPoints, dbPath);
                     processed += currentBatch.length;
                     
                     // Update progress using UPSERT
                     upsertProgress.run(level + 1, parentI, parentJ, currentBatch.length);
+                    
+                    // Log progress after batch
+                    logDatabaseStatus(dbPath, `Batch complete at level ${level}`, {
+                        totalProcessed: processed,
+                        remaining: 10000 - (processed + result.count)
+                    });
                     
                     currentBatch = [];
                     await new Promise(resolve => setTimeout(resolve, DELAY_MS));
@@ -455,9 +531,9 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
         // Process remaining points
         if (currentBatch.length > 0) {
             try {
-                logProgress(`Processing final batch of ${currentBatch.length} points for level ${level + 1}`);
+                logDatabaseStatus(dbPath, `Processing final batch of ${currentBatch.length} points for level ${level + 1}`);
                 const newPoints = await processBatch(currentBatch);
-                saveBatch(db, newPoints);
+                await saveBatch(db, newPoints, dbPath);
                 processed += currentBatch.length;
                 
                 // Update progress using UPSERT
@@ -542,18 +618,6 @@ function checkPointExists(db, lat, lon) {
     return result.count > 0;
 }
 
-async function saveBatch(db, points) {
-    const stmt = db.prepare('INSERT INTO points (lat, lon, elevation, source) VALUES (?, ?, ?, ?)');
-    
-    const transaction = db.transaction((points) => {
-        for (const point of points) {
-            stmt.run(point.lat, point.lon, point.elevation, point.source);
-        }
-    });
-    
-    transaction(points);
-}
-
 async function loadEnhanceBounds() {
     const boundsFile = path.join(__dirname, 'enhance_bounds.json');
     if (fs.existsSync(boundsFile)) {
@@ -631,6 +695,7 @@ async function findMostIncompleteDatabase() {
     return { x: 0, y: 0, points: 0, completion: 0 };
 }
 
+// Modify main function to include enhanced logging
 async function main() {
     try {
         // Find the next database to process without locking
@@ -640,10 +705,10 @@ async function main() {
             return;
         }
 
-        console.log(`Processing database: mountains_${db.x}_${db.y}.db`);
+        const dbPath = path.join(GRID_DB_DIR, `mountains_${db.x}_${db.y}.db`);
+        logDatabaseStatus(dbPath, 'Starting processing');
         
         // Initialize database connection
-        const dbPath = path.join(GRID_DB_DIR, `mountains_${db.x}_${db.y}.db`);
         const database = new Database(dbPath);
 
         try {
@@ -651,26 +716,42 @@ async function main() {
             const result = database.prepare('SELECT COUNT(*) as count FROM points').get();
             const currentPoints = result.count;
             
+            logDatabaseStatus(dbPath, 'Initial state', {
+                currentPoints,
+                remaining: 10000 - currentPoints
+            });
+            
             if (currentPoints >= 10000) {
-                console.log(`Database mountains_${db.x}_${db.y}.db already has ${currentPoints} points. Moving to next database.`);
+                logDatabaseStatus(dbPath, 'Database complete', {
+                    points: currentPoints
+                });
                 return;
             }
 
-            console.log(`Current points: ${currentPoints}, Target: 10000`);
+            // Log initial source distribution
+            logSourceDistribution(database, dbPath);
             
             // Process the database
-            await collectHierarchicalPoints(database);
+            await collectHierarchicalPoints(database, 0, NM_BOUNDS, db.x, db.y);
             
-            // Final check
+            // Final check and logging
             const finalResult = database.prepare('SELECT COUNT(*) as count FROM points').get();
-            console.log(`Completed processing mountains_${db.x}_${db.y}.db. Final point count: ${finalResult.count}`);
+            logDatabaseStatus(dbPath, 'Processing complete', {
+                finalPoints: finalResult.count,
+                targetMet: finalResult.count >= 10000 ? 'Yes' : 'No'
+            });
+            
+            // Log final source distribution
+            logSourceDistribution(database, dbPath);
             
         } finally {
             await database.close();
+            logDatabaseStatus(dbPath, 'Database connection closed');
         }
 
     } catch (error) {
         console.error('Error in main:', error);
+        logError(error, 'Error in main process');
     }
 }
 
