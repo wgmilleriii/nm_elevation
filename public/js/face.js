@@ -13,6 +13,12 @@ const NM_BOUNDS = {
     west: -109.20
 };
 
+// Add elevation constants
+const ELEVATION_BOUNDS = {
+    min: 1000,  // Lowest point in NM ~1000m (Red Bluff Reservoir)
+    max: 4000   // Highest point in NM ~4000m (Wheeler Peak)
+};
+
 import NM_CITIES from './cities.js';
 import { svgLogger, mapLogger, dataLogger } from './logger.js';
 import { 
@@ -22,6 +28,7 @@ import {
     drawElevationPoints,
     createElevationLegend 
 } from './svgUtils.js';
+import ZoomBasedCollector from './ZoomBasedCollector.js';
 
 // Add CSS for city labels
 const style = document.createElement('style');
@@ -33,6 +40,57 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Add progress indicator styles at the top
+const progressStyle = document.createElement('style');
+progressStyle.textContent = `
+    .progress-indicator {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 10px 15px;
+        border-radius: 5px;
+        font-size: 14px;
+        z-index: 1000;
+        display: none;
+    }
+    
+    .progress-bar {
+        width: 200px;
+        height: 5px;
+        background: #444;
+        border-radius: 3px;
+        margin-top: 5px;
+    }
+    
+    .progress-bar-fill {
+        height: 100%;
+        background: #4CAF50;
+        border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+
+    .progress-details {
+        font-size: 12px;
+        color: #ccc;
+        margin-top: 5px;
+    }
+`;
+document.head.appendChild(progressStyle);
+
+// Add progress indicator element
+const progressIndicator = document.createElement('div');
+progressIndicator.className = 'progress-indicator';
+progressIndicator.innerHTML = `
+    <div class="progress-text">Loading elevation data...</div>
+    <div class="progress-bar">
+        <div class="progress-bar-fill" style="width: 0%"></div>
+    </div>
+    <div class="progress-details"></div>
+`;
+document.body.appendChild(progressIndicator);
 
 // Create grid points within bounds
 function createGridPoints(bounds) {
@@ -61,45 +119,424 @@ const ElevationCircle = L.CircleMarker.extend({
     }
 });
 
-// Fetch data from server
-async function fetchData(bounds) {
-    const south = bounds.getSouth();
-    const north = bounds.getNorth();
-    const west = bounds.getWest();
-    const east = bounds.getEast();
-    
-    const boundsStr = `${south},${west},${north},${east}`;
-    dataLogger.log('Fetching elevation data', { bounds: { south, north, west, east } });
-    
-    try {
-        const response = await fetch(`/api/elevation-data?bounds=${boundsStr}`);
-        if (!response.ok) {
-            const error = new Error(`HTTP error! status: ${response.status}`);
-            dataLogger.error('Failed to fetch elevation data', error);
-            throw error;
-        }
-        const data = await response.json();
-        dataLogger.log('Received elevation data', { 
-            pointCount: data.points?.length,
-            stats: data.stats,
-            samplePoints: data.points?.slice(0, 3)
-        });
-        return data;
-    } catch (error) {
-        dataLogger.error('Error fetching elevation data', error);
-        throw error;
+// Create color scale function
+function getElevationColor(elevation) {
+    if (elevation === null || elevation === undefined) {
+        return 'rgba(200,200,200,0.5)'; // Gray for unknown elevation
     }
+    const normalizedElevation = (elevation - ELEVATION_BOUNDS.min) / (ELEVATION_BOUNDS.max - ELEVATION_BOUNDS.min);
+    const r = Math.round(255 * (1 - normalizedElevation)); // Blue component decreases
+    const g = Math.round(255 * normalizedElevation);      // Green increases
+    const b = Math.round(255 * (1 - normalizedElevation)); // Blue component decreases
+    return `rgb(${r},${g},${b})`;
 }
 
-function getElevationColor(elevation, minElevation, maxElevation) {
-    if (elevation === null) {
-        return 'rgba(255,255,255,0.5)';
+// Add a class to manage elevation data gathering
+class ElevationDataManager {
+    constructor(map) {
+        this.map = map;
+        this.elevationData = new Map(); // Store elevation data points
+        this.isGathering = false;
+        this.currentBounds = null;
+        this.gatherInterval = 5000; // 5 seconds between updates
+        this.currentOffset = 0;
+        this.isLoadingChunk = false;
+        this.progressCallback = null;
+        this.totalPoints = 0;
+        this.loadedPoints = 0;
+        this.startTime = null;
+        this.lastChunkTime = null;
+        this.chunkRates = [];
+        
+        // Initialize progress UI elements
+        this.progressElement = document.querySelector('.progress-indicator');
+        this.progressBarFill = this.progressElement.querySelector('.progress-bar-fill');
+        this.progressText = this.progressElement.querySelector('.progress-text');
+        this.progressDetails = this.progressElement.querySelector('.progress-details');
     }
-    const normalized = (elevation - minElevation) / (maxElevation - minElevation);
-    const r = Math.round(normalized * 255);
-    const g = Math.round(normalized * 255);
-    const b = Math.round(255 * (1 - normalized));
-    return `rgb(${r},${g},${b})`;
+
+    // Add method to set progress callback
+    onProgress(callback) {
+        this.progressCallback = callback;
+    }
+
+    // Add method to validate and clip bounds
+    validateAndClipBounds(bounds) {
+        // Return a new bounds object clipped to NM boundaries
+        const clippedBounds = L.latLngBounds(
+            [
+                Math.max(bounds.getSouth(), NM_BOUNDS.south),
+                Math.max(bounds.getWest(), NM_BOUNDS.west)
+            ],
+            [
+                Math.min(bounds.getNorth(), NM_BOUNDS.north),
+                Math.min(bounds.getEast(), NM_BOUNDS.east)
+            ]
+        );
+
+        // Check if the clipped bounds are valid (have non-zero area)
+        if (clippedBounds.getSouth() >= clippedBounds.getNorth() ||
+            clippedBounds.getWest() >= clippedBounds.getEast()) {
+            return null;
+        }
+
+        return clippedBounds;
+    }
+
+    updateProgressUI(stats) {
+        // Initialize timing on first chunk
+        if (!this.startTime) {
+            this.startTime = Date.now();
+            this.lastChunkTime = Date.now();
+            this.loadedPoints = 0;
+            this.totalPoints = stats.count || stats.point_count;
+        }
+
+        const currentTime = Date.now();
+        const chunkTime = (currentTime - this.lastChunkTime) / 1000;
+        const totalTime = (currentTime - this.startTime) / 1000;
+
+        // Update points count
+        this.loadedPoints = stats.point_count;
+        if (stats.count > this.totalPoints) {
+            this.totalPoints = stats.count;
+        }
+
+        // Calculate rates
+        const chunkRate = stats.point_count / Math.max(chunkTime, 0.1);
+        this.chunkRates.push(chunkRate);
+        if (this.chunkRates.length > 5) this.chunkRates.shift(); // Keep last 5 rates
+        const avgRate = this.chunkRates.reduce((a, b) => a + b, 0) / this.chunkRates.length;
+
+        // Calculate progress
+        const percentComplete = Math.min(100, Math.round((this.loadedPoints / this.totalPoints) * 100));
+
+        // Update progress bar
+        this.progressBarFill.style.width = `${percentComplete}%`;
+        
+        // Update text
+        this.progressText.textContent = `Loading elevation data: ${percentComplete}%`;
+        this.progressDetails.innerHTML = `
+            Points: ${this.loadedPoints.toLocaleString()} / ${this.totalPoints.toLocaleString()}<br>
+            Rate: ${Math.round(avgRate)} points/sec<br>
+            Time: ${totalTime.toFixed(1)}s<br>
+            Elevation: ${stats.min_elevation}m to ${stats.max_elevation}m
+        `;
+
+        // Show/hide progress indicator
+        this.progressElement.style.display = percentComplete < 100 ? 'block' : 'none';
+
+        // Log to console
+        console.log(`Elevation data progress:
+            - Completed: ${percentComplete}%
+            - Points: ${this.loadedPoints.toLocaleString()} / ${this.totalPoints.toLocaleString()}
+            - Rate: ${Math.round(avgRate)} points/sec
+            - Time: ${totalTime.toFixed(1)}s
+            - Elevation range: ${stats.min_elevation}m to ${stats.max_elevation}m
+            - Chunk time: ${chunkTime.toFixed(1)}s
+        `);
+
+        // Update last chunk time
+        this.lastChunkTime = currentTime;
+    }
+
+    startGathering(bounds) {
+        const validBounds = this.validateAndClipBounds(bounds);
+        if (!validBounds) {
+            console.log('Bounds completely outside New Mexico - skipping data gathering');
+            return;
+        }
+        
+        // Reset state when new bounds are set
+        if (!this.currentBounds || 
+            validBounds.getSouth() !== this.currentBounds.getSouth() ||
+            validBounds.getNorth() !== this.currentBounds.getNorth() ||
+            validBounds.getWest() !== this.currentBounds.getWest() ||
+            validBounds.getEast() !== this.currentBounds.getEast()) {
+            
+            this.elevationData.clear();
+            this.currentOffset = 0;
+            this.startTime = null;
+            this.lastChunkTime = null;
+            this.chunkRates = [];
+            this.loadedPoints = 0;
+            this.totalPoints = 0;
+        }
+        
+        this.currentBounds = validBounds;
+        if (!this.isGathering) {
+            this.isGathering = true;
+            this.gatherData();
+        }
+    }
+
+    stopGathering() {
+        this.isGathering = false;
+    }
+
+    async gatherData() {
+        while (this.isGathering) {
+            try {
+                if (!this.currentBounds || this.isLoadingChunk) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    continue;
+                }
+
+                this.isLoadingChunk = true;
+                const response = await fetch(
+                    `/api/elevation-data?bounds=${this.currentBounds.getSouth()},${this.currentBounds.getWest()},` +
+                    `${this.currentBounds.getNorth()},${this.currentBounds.getEast()}&offset=${this.currentOffset}`
+                );
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                const data = await response.json();
+                if (data.points) {
+                    // Add new points to our data store
+                    data.points.forEach(point => {
+                        const key = `${point.latitude},${point.longitude}`;
+                        this.elevationData.set(key, point.elevation);
+                    });
+
+                    // Update progress UI
+                    this.updateProgressUI(data.stats);
+                    
+                    // Trigger visualization update
+                    this.updateVisualization();
+
+                    // Check if we need to load more
+                    if (data.stats.hasMore) {
+                        this.currentOffset += data.stats.chunkSize;
+                        this.isLoadingChunk = false;
+                        // Continue immediately to next chunk
+                        continue;
+                    } else {
+                        // All data loaded
+                        this.isLoadingChunk = false;
+                        this.startTime = null; // Reset timer for next data gathering
+                        await new Promise(resolve => setTimeout(resolve, this.gatherInterval));
+                    }
+                }
+            } catch (error) {
+                console.error('Error gathering elevation data:', error);
+                // Show error in progress indicator
+                this.progressText.textContent = `Error: ${error.message}`;
+                this.progressElement.style.display = 'block';
+                this.progressElement.style.background = 'rgba(255, 0, 0, 0.8)';
+                
+                this.isLoadingChunk = false;
+                await new Promise(resolve => setTimeout(resolve, this.gatherInterval));
+            }
+        }
+    }
+
+    updateVisualization() {
+        const svg = d3.select('#svg1');
+        const container = document.getElementById('svg-container');
+        
+        // Check if elements exist before proceeding
+        if (!svg.node() || !container || !this.map) {
+            console.warn('Required DOM elements or map not found for visualization update');
+            return;
+        }
+        
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        
+        // Get current map bounds
+        const bounds = this.map.getBounds();
+        const mapBounds = {
+            north: bounds.getNorth(),
+            south: bounds.getSouth(),
+            east: bounds.getEast(),
+            west: bounds.getWest()
+        };
+
+        // Log viewport information
+        console.log('Map Viewport:', {
+            dimensions: { width, height },
+            bounds: mapBounds,
+            center: this.map.getCenter(),
+            zoom: this.map.getZoom()
+        });
+
+        try {
+            // Clear existing elevation points group
+            svg.selectAll('.elevation-points').remove();
+
+            // Filter points to only those within the current map bounds
+            const points = Array.from(this.elevationData.entries())
+                .map(([key, elevation]) => {
+                    const [lat, lon] = key.split(',').map(Number);
+                    return { latitude: lat, longitude: lon, elevation };
+                })
+                .filter(point => 
+                    point.latitude >= mapBounds.south &&
+                    point.latitude <= mapBounds.north &&
+                    point.longitude >= mapBounds.west &&
+                    point.longitude <= mapBounds.east
+                );
+
+            console.log(`Rendering ${points.length} points within current map bounds`);
+
+            // Create color scale
+            const colorScale = d3.scaleLinear()
+                .domain([ELEVATION_BOUNDS.min, ELEVATION_BOUNDS.max])
+                .range(['blue', 'yellow']);
+
+            // Create transformation scales based on current map bounds
+            const xScale = d3.scaleLinear()
+                .domain([mapBounds.west, mapBounds.east])
+                .range([50, width - 50]);
+
+            const yScale = d3.scaleLinear()
+                .domain([mapBounds.south, mapBounds.north])
+                .range([height - 50, 50]);
+
+            // Create elevation points group
+            const pointsGroup = svg.append('g')
+                .attr('class', 'elevation-points');
+
+            // Draw points
+            pointsGroup.selectAll('circle')
+                .data(points)
+                .enter()
+                .append('circle')
+                .attr('cx', d => xScale(d.longitude))
+                .attr('cy', d => yScale(d.latitude))
+                .attr('r', 3)
+                .attr('fill', d => colorScale(d.elevation))
+                .attr('class', 'elevation-point')
+                .attr('data-elevation', d => d.elevation)
+                .append('title')
+                .text(d => `Elevation: ${d.elevation.toFixed(1)}m`);
+
+            // Update legend
+            this.updateLegend(svg, width, height);
+
+            // Update cities within bounds
+            this.updateCities(svg, xScale, yScale, mapBounds);
+
+            console.log('Visualization updated:', {
+                pointCount: points.length,
+                visibleArea: {
+                    width: mapBounds.east - mapBounds.west,
+                    height: mapBounds.north - mapBounds.south,
+                    center: {
+                        lat: (mapBounds.north + mapBounds.south) / 2,
+                        lon: (mapBounds.east + mapBounds.west) / 2
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error updating visualization:', error);
+        }
+    }
+
+    updateLegend(svg, width, height) {
+        // Remove existing legend
+        svg.selectAll('.legend').remove();
+
+        // Create legend group
+        const legend = svg.append('g')
+            .attr('class', 'legend')
+            .attr('transform', `translate(${width - 220}, ${height - 40})`);
+
+        // Create gradient
+        const defs = svg.append('defs');
+        const gradient = defs.append('linearGradient')
+            .attr('id', 'elevation-gradient')
+            .attr('x1', '0%')
+            .attr('x2', '100%');
+
+        gradient.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', 'blue');
+
+        gradient.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', 'yellow');
+
+        // Draw legend rectangle
+        legend.append('rect')
+            .attr('width', 200)
+            .attr('height', 20)
+            .style('fill', 'url(#elevation-gradient)');
+
+        // Add legend labels
+        legend.append('text')
+            .attr('x', 0)
+            .attr('y', 35)
+            .attr('text-anchor', 'start')
+            .text(`${ELEVATION_BOUNDS.min}m`);
+
+        legend.append('text')
+            .attr('x', 200)
+            .attr('y', 35)
+            .attr('text-anchor', 'end')
+            .text(`${ELEVATION_BOUNDS.max}m`);
+    }
+
+    updateCities(svg, xScale, yScale, mapBounds) {
+        // Remove existing cities
+        svg.selectAll('.cities').remove();
+
+        // Filter cities within bounds
+        const visibleCities = NM_CITIES.filter(city => 
+            city.lat >= mapBounds.south &&
+            city.lat <= mapBounds.north &&
+            city.lon >= mapBounds.west &&
+            city.lon <= mapBounds.east
+        );
+
+        if (visibleCities.length === 0) return;
+
+        // Calculate population range for scaling
+        const populations = visibleCities.map(city => city.population);
+        const minPop = Math.min(...populations);
+        const maxPop = Math.max(...populations);
+
+        // Create cities group
+        const citiesGroup = svg.append('g')
+            .attr('class', 'cities');
+
+        visibleCities.forEach(city => {
+            const popRatio = (Math.log(city.population) - Math.log(minPop)) / (Math.log(maxPop) - Math.log(minPop));
+            const radius = 5 + (popRatio * 15);
+            const fontSize = 12 + (popRatio * 8);
+
+            // Draw city marker
+            citiesGroup.append('circle')
+                .attr('cx', xScale(city.lon))
+                .attr('cy', yScale(city.lat))
+                .attr('r', radius)
+                .attr('class', 'city-marker')
+                .attr('fill', '#3388ff')
+                .attr('fill-opacity', 0.5)
+                .attr('stroke', 'white')
+                .attr('stroke-width', 2);
+
+            // Add city label
+            citiesGroup.append('text')
+                .attr('x', xScale(city.lon))
+                .attr('y', yScale(city.lat) - radius - 5)
+                .attr('text-anchor', 'middle')
+                .attr('class', 'city-label')
+                .attr('font-size', fontSize)
+                .attr('font-weight', 'bold')
+                .attr('stroke', 'white')
+                .attr('stroke-width', 3)
+                .attr('stroke-linejoin', 'round')
+                .attr('paint-order', 'stroke')
+                .text(city.name);
+        });
+
+        console.log('Cities updated:', {
+            totalCities: NM_CITIES.length,
+            visibleCities: visibleCities.length,
+            bounds: mapBounds
+        });
+    }
 }
 
 // Add loading indicator
@@ -160,7 +597,7 @@ async function updateMapWithGrid(bounds) {
         gridPoints.forEach((point, i) => {
             const elevation = data.points[i]?.elevation;
             if (elevation !== undefined) {
-                const color = getElevationColor(elevation, data.stats.min_elevation, data.stats.max_elevation);
+                const color = getElevationColor(elevation);
                 circles[i].setStyle({
                     color: color,
                     fillColor: color
@@ -233,7 +670,7 @@ function renderSVG(points, stats) {
     );
 
     // Create color scale
-    const colorScale = createElevationColorScale(stats.min_elevation, stats.max_elevation);
+    const colorScale = createElevationColorScale(ELEVATION_BOUNDS.min, ELEVATION_BOUNDS.max);
     
     try {
         // Draw elevation points
@@ -270,7 +707,7 @@ function renderSVG(points, stats) {
 
         // Add legend
         const legendFragment = createElevationLegend(
-            { min: stats.min_elevation, max: stats.max_elevation },
+            { min: ELEVATION_BOUNDS.min, max: ELEVATION_BOUNDS.max },
             { x: width - 220, y: height - 40, width: 200, height: 20 }
         );
         svg.node().appendChild(legendFragment);
@@ -418,6 +855,12 @@ class ElevationViewer {
         this.svg = d3.select('#svg1');
         this.tooltip = d3.select('.tooltip');
         this.loading = d3.select('.loading');
+        this.initMap();
+        this.elevationManager = new ElevationDataManager(this.map);
+        this.zoomCollector = new ZoomBasedCollector();
+        
+        // Set up progress callback
+        this.elevationManager.onProgress(this.updateProgress.bind(this));
         
         // Initialize SVG container
         const container = document.getElementById('svg-container');
@@ -430,9 +873,23 @@ class ElevationViewer {
             
         // Draw initial cities
         this.drawInitialCities();
+    }
+
+    updateProgress(stats) {
+        const indicator = document.querySelector('.progress-indicator');
+        const progressBar = indicator.querySelector('.progress-bar-fill');
+        const progressText = indicator.querySelector('.progress-text');
         
-        // Initialize map
-        this.initMap();
+        if (stats.percentComplete < 100) {
+            indicator.style.display = 'block';
+            progressBar.style.width = `${stats.percentComplete}%`;
+            progressText.textContent = `Loading elevation data: ${stats.percentComplete}% (${stats.point_count} of ${stats.totalPoints} points)`;
+        } else {
+            // Hide after a short delay
+            setTimeout(() => {
+                indicator.style.display = 'none';
+            }, 1000);
+        }
     }
 
     drawInitialCities() {
@@ -480,17 +937,9 @@ class ElevationViewer {
         if (!this.map) {
             mapLogger.log('Initializing map');
             try {
-                this.map = L.map('map', {
-                    center: [34.5199, -105.8701],
-                    zoom: 6,
-                    minZoom: 6,
-                    maxZoom: 13
-                });
+                this.map = L.map('map');
 
-                mapLogger.log('Map initialized', {
-                    center: [34.5199, -105.8701],
-                    zoom: 6
-                });
+                mapLogger.log('Map initialized');
 
                 // Add tile layer (OpenStreetMap)
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -498,13 +947,13 @@ class ElevationViewer {
                     attribution: '© OpenStreetMap contributors'
                 }).addTo(this.map);
 
-                // Set initial bounds to New Mexico
-                selectedBounds = L.latLngBounds(
-                    [NM_BOUNDS.south, NM_BOUNDS.west],  // Southwest
-                    [NM_BOUNDS.north, NM_BOUNDS.east]   // Northeast
-                );
+                // Set initial view to specified location
+                const targetLat = 35.11791663567986;
+                const targetLon = -106.54626426361224;
+                const zoomLevel = 14; // Higher zoom level for ~10 mile radius
+                this.map.setView([targetLat, targetLon], zoomLevel);
 
-                mapLogger.log('Set initial bounds', NM_BOUNDS);
+                mapLogger.log('Set initial view', { lat: targetLat, lon: targetLon, zoom: zoomLevel });
 
                 // Add New Mexico boundary rectangle
                 L.rectangle([
@@ -518,71 +967,93 @@ class ElevationViewer {
                     opacity: 0.8
                 }).addTo(this.map);
 
-                // Add map move event listeners
-                this.map.on('moveend', () => {
-                    const bounds = this.map.getBounds();
-                    mapLogger.log('Map moved', {
-                        bounds: bounds.toBBoxString(),
-                        zoom: this.map.getZoom()
-                    });
-                    
-                    // Update SVG with new bounds
-                    this.updateSVGWithMapBounds(bounds);
+                // Initialize gather elevation button
+                const gatherButton = document.getElementById('gather-elevation');
+                gatherButton.addEventListener('click', async () => {
+                    if (gatherButton.classList.contains('gathering')) return;
+                    await this.gatherElevationData();
                 });
 
                 // Add city markers and labels
-                const maxPop = Math.max(...NM_CITIES.map(city => city.population));
-                const minPop = Math.min(...NM_CITIES.map(city => city.population));
-                
-                NM_CITIES.forEach(city => {
-                    // Calculate size based on population (logarithmic scale)
-                    const popRatio = (Math.log(city.population) - Math.log(minPop)) / (Math.log(maxPop) - Math.log(minPop));
-                    const circleRadius = 5 + (popRatio * 15); // Radius between 5 and 20 pixels
-                    const fontSize = 12 + (popRatio * 8); // Font size between 12 and 20 pixels
-                    
-                    // Add circle marker
-                    L.circleMarker([city.lat, city.lon], {
-                        radius: circleRadius,
-                        fillColor: '#3388ff',
-                        color: '#fff',
-                        weight: 2,
-                        opacity: 1,
-                        fillOpacity: 0.5
-                    })
-                    .bindPopup(`${city.name}<br>Population: ${city.population.toLocaleString()}`)
-                    .addTo(this.map);
-                    
-                    // Add city label
-                    const label = L.divIcon({
-                        className: 'city-label',
-                        html: `<div style="font-size: ${fontSize}px; font-weight: bold; 
-                                       text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, 
-                                                  -1px 1px 0 #fff, 1px 1px 0 #fff;">
-                            ${city.name}
-                           </div>`,
-                        iconSize: [100, 20],
-                        iconAnchor: [50, -10]
-                    });
-                    
-                    L.marker([city.lat, city.lon], {
-                        icon: label,
-                        interactive: false
-                    }).addTo(this.map);
-                });
-
-                mapLogger.log('Added city markers', { cityCount: NM_CITIES.length });
+                this.addCityMarkers();
 
                 // Initialize the selection canvas after map is ready
                 this.map.whenReady(() => {
                     setupRectangleSelection(this.map);
                     mapLogger.log('Rectangle selection initialized');
+                    
+                    // Automatically trigger data gathering after map is ready
+                    setTimeout(() => {
+                        this.gatherElevationData();
+                    }, 1000);
                 });
+
             } catch (error) {
                 mapLogger.error('Error initializing map', error);
                 throw error;
             }
         } else {
             mapLogger.log('Map already initialized');
+        }
+    }
+
+    // Add new method to handle elevation data gathering
+    async gatherElevationData() {
+        const gatherButton = document.getElementById('gather-elevation');
+        if (gatherButton.classList.contains('gathering')) return;
+        
+        const bounds = this.map.getBounds();
+        const zoom = this.map.getZoom();
+        const center = this.map.getCenter();
+        
+        // Update button state
+        gatherButton.classList.add('gathering');
+        const buttonText = gatherButton.querySelector('.button-text');
+        const originalText = buttonText.textContent;
+        buttonText.textContent = 'Gathering Data...';
+        
+        try {
+            // Convert bounds to our format
+            const boundingBox = {
+                north: bounds.getNorth(),
+                south: bounds.getSouth(),
+                east: bounds.getEast(),
+                west: bounds.getWest(),
+                center: {
+                    lat: center.lat,
+                    lon: center.lng
+                }
+            };
+            
+            // Start zoom-based collection if zoom level is high enough
+            if (zoom >= 8) {
+                await this.zoomCollector.startCollection(boundingBox, zoom);
+            }
+            
+            // Update elevation data gathering bounds
+            await this.elevationManager.startGathering(bounds);
+            
+            // Update SVG with new bounds
+            this.updateSVGWithMapBounds(bounds);
+            
+            // Show success state briefly
+            buttonText.textContent = 'Data Gathered!';
+            gatherButton.style.background = '#4CAF50';
+            setTimeout(() => {
+                buttonText.textContent = originalText;
+                gatherButton.classList.remove('gathering');
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Error gathering elevation data:', error);
+            // Show error state
+            buttonText.textContent = 'Error - Try Again';
+            gatherButton.style.background = '#f44336';
+            setTimeout(() => {
+                buttonText.textContent = originalText;
+                gatherButton.classList.remove('gathering');
+                gatherButton.style.background = '';
+            }, 3000);
         }
     }
 
@@ -630,6 +1101,50 @@ class ElevationViewer {
         } catch (error) {
             svgLogger.error('Error updating SVG with map bounds', error);
         }
+    }
+
+    // Add city markers and labels
+    addCityMarkers() {
+        const maxPop = Math.max(...NM_CITIES.map(city => city.population));
+        const minPop = Math.min(...NM_CITIES.map(city => city.population));
+        
+        NM_CITIES.forEach(city => {
+            // Calculate size based on population (logarithmic scale)
+            const popRatio = (Math.log(city.population) - Math.log(minPop)) / (Math.log(maxPop) - Math.log(minPop));
+            const circleRadius = 5 + (popRatio * 15); // Radius between 5 and 20 pixels
+            const fontSize = 12 + (popRatio * 8); // Font size between 12 and 20 pixels
+            
+            // Add circle marker
+            L.circleMarker([city.lat, city.lon], {
+                radius: circleRadius,
+                fillColor: '#3388ff',
+                color: '#fff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.5
+            })
+            .bindPopup(`${city.name}<br>Population: ${city.population.toLocaleString()}`)
+            .addTo(this.map);
+            
+            // Add city label
+            const label = L.divIcon({
+                className: 'city-label',
+                html: `<div style="font-size: ${fontSize}px; font-weight: bold; 
+                               text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, 
+                                          -1px 1px 0 #fff, 1px 1px 0 #fff;">
+                    ${city.name}
+                   </div>`,
+                iconSize: [100, 20],
+                iconAnchor: [50, -10]
+            });
+            
+            L.marker([city.lat, city.lon], {
+                icon: label,
+                interactive: false
+            }).addTo(this.map);
+        });
+
+        mapLogger.log('Added city markers', { cityCount: NM_CITIES.length });
     }
 }
 
