@@ -295,11 +295,26 @@ def create_elevation_legend(image, min_elev, max_elev, width=2000, height=2000):
     # Draw title
     draw.text((title_x, legend_y - 25), title, font=font, fill='black')
 
-def create_elevation_image(points, width=2000, height=2000):
+def create_elevation_image(points, width=2000, height=2000, bounds=None):
     """Create an elevation image from points"""
     print("Starting elevation image creation...")
+    print(f"Number of points received: {len(points)}")
+    
+    if not points:
+        raise ValueError("No elevation points found in the selected area. Please try a different selection.")
+    
     total_steps = 4  # Total number of major steps
     current_step = 0
+    
+    # Use provided bounds or default to New Mexico bounds
+    if bounds is None:
+        bounds = {
+            'minLat': 31.20,
+            'maxLat': 37.20,
+            'minLon': -109.20,
+            'maxLon': -102.80
+        }
+    print(f"Using bounds: {bounds}")
     
     # Create empty grid
     grid = np.zeros((height, width), dtype=np.float32)
@@ -311,6 +326,7 @@ def create_elevation_image(points, width=2000, height=2000):
     elevations = [p[2] for p in points]
     min_elev = min(elevations)
     max_elev = max(elevations)
+    print(f"Elevation range: {min_elev:.1f}m to {max_elev:.1f}m")
     
     # Convert points to grid coordinates
     print(f"Step {current_step}/{total_steps}: Converting points to grid...")
@@ -318,8 +334,8 @@ def create_elevation_image(points, width=2000, height=2000):
     for i, (lat, lon, elev) in enumerate(points):
         if i % 10000 == 0:  # Show progress every 10,000 points
             print(f"Processing points: {i}/{total_points} ({(i/total_points*100):.1f}%)")
-        x = int((lon - NM_BOUNDS['minLon']) / (NM_BOUNDS['maxLon'] - NM_BOUNDS['minLon']) * (width - 1))
-        y = int((NM_BOUNDS['maxLat'] - lat) / (NM_BOUNDS['maxLat'] - NM_BOUNDS['minLat']) * (height - 1))
+        x = int((lon - bounds['minLon']) / (bounds['maxLon'] - bounds['minLon']) * (width - 1))
+        y = int((bounds['maxLat'] - lat) / (bounds['maxLat'] - bounds['minLat']) * (height - 1))
         if 0 <= x < width and 0 <= y < height:
             grid[y, x] += elev
             counts[y, x] += 1

@@ -199,6 +199,21 @@ function logDetailedProgress(message) {
     console.log(`Detailed: ${message}`);
 }
 
+function logDatabaseStatus(dbPath, message, data = {}) {
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} - DB: ${dbPath} - ${message} - ${JSON.stringify(data)}\n`;
+    fs.appendFileSync('collection_progress.log', logEntry);
+    console.log(logEntry);
+}
+
+function logSourceDistribution(db, dbPath) {
+    const result = db.prepare('SELECT source, COUNT(*) as count FROM points GROUP BY source').all();
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} - DB: ${dbPath} - Source distribution: ${JSON.stringify(result)}\n`;
+    fs.appendFileSync('collection_progress.log', logEntry);
+    console.log(logEntry);
+}
+
 // Replace handleRateLimit function
 async function handleRateLimit(api) {
     const status = API_STATUS[api.name];
