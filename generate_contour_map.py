@@ -1,128 +1,112 @@
 import sqlite3
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
 import os
 import glob
-from PIL import Image, ImageDraw, ImageFont
 
-# New Mexico bounds
-NM_BOUNDS = {
-    'minLat': 31.20,
-    'maxLat': 37.20,
-    'minLon': -109.20,
-    'maxLon': -102.80
-}
-
-# Top 10 New Mexico cities
-NM_CITIES = [
-    {"name": "Albuquerque", "lat": 35.0844, "lon": -106.6504, "population": 564559},
-    {"name": "Las Cruces", "lat": 32.3199, "lon": -106.7637, "population": 111385},
-    {"name": "Rio Rancho", "lat": 35.2328, "lon": -106.6630, "population": 104046},
-    {"name": "Santa Fe", "lat": 35.6870, "lon": -105.9378, "population": 87505},
-    {"name": "Roswell", "lat": 33.3943, "lon": -104.5230, "population": 48386},
-    {"name": "Farmington", "lat": 36.7281, "lon": -108.2087, "population": 46624},
-    {"name": "Clovis", "lat": 34.4048, "lon": -103.2052, "population": 39860},
-    {"name": "Hobbs", "lat": 32.7026, "lon": -103.1360, "population": 39141},
-    {"name": "Alamogordo", "lat": 32.8995, "lon": -105.9603, "population": 31384},
-    {"name": "Carlsbad", "lat": 32.4207, "lon": -104.2288, "population": 32238},
-    {"name": "Taos", "lat": 36.4072, "lon": -105.5734, "population": 5716}
-]
-
-def get_elevation_data():
-    """Fetch all elevation data from the grid of databases"""
+def load_all_elevation_data():
+    """Load elevation data from all grid databases."""
     all_points = []
+    total_dbs = 0
+    points_per_db = {}
     
-    # Get all database files in the grid_databases directory
+    # Get all database files
     db_files = glob.glob('grid_databases/mountains_*.db')
+    print(f"Found {len(db_files)} database files")
     
     for db_file in db_files:
         try:
             conn = sqlite3.connect(db_file)
             cursor = conn.cursor()
             
-            # Get all points within New Mexico bounds
-            cursor.execute("""
-                SELECT latitude, longitude, elevation
-                FROM elevation_points
-                WHERE latitude BETWEEN ? AND ?
-                AND longitude BETWEEN ? AND ?
-                AND elevation IS NOT NULL
-            """, [NM_BOUNDS['minLat'], NM_BOUNDS['maxLat'], 
-                  NM_BOUNDS['minLon'], NM_BOUNDS['maxLon']])
-            
+            # Get points from this database
+            cursor.execute("SELECT lat, lon, elevation FROM points WHERE elevation IS NOT NULL")
             points = cursor.fetchall()
-            all_points.extend(points)
-            conn.close()
             
-        except sqlite3.Error as e:
+            if points:
+                total_dbs += 1
+                points_per_db[os.path.basename(db_file)] = len(points)
+                all_points.extend(points)
+            
+            conn.close()
+        except Exception as e:
             print(f"Error reading {db_file}: {e}")
             continue
     
-    print(f"Read elevation data from {len(db_files)} databases")
+    # Print statistics
+    print(f"\nDatabase Statistics:")
+    print(f"Total databases with data: {total_dbs}")
+    print(f"Total points collected: {len(all_points)}")
+    print("\nPoints per database:")
+    for db, count in sorted(points_per_db.items(), key=lambda x: x[1], reverse=True)[:10]:
+        print(f"{db}: {count} points")
+    
+    if all_points:
+        # Convert to numpy arrays for statistics
+        elevations = np.array([p[2] for p in all_points])
+        print(f"\nElevation Statistics:")
+        print(f"Min elevation: {np.min(elevations):.1f}m")
+        print(f"Max elevation: {np.max(elevations):.1f}m")
+        print(f"Mean elevation: {np.mean(elevations):.1f}m")
+    
     return all_points
 
-def create_contour_map(points, width=2000, height=2000):
-    """Create a contour map from elevation points"""
-    print("Starting contour map creation...")
+def create_contour_map():
+    # Load all elevation data
+    points = load_all_elevation_data()
     
-    # Create empty grid
-    grid = np.zeros((height, width), dtype=np.float32)
-    counts = np.zeros((height, width), dtype=np.int32)
+    if not points:
+        print("No elevation data found!")
+        return
     
-    # Convert points to grid coordinates
-    print("Converting points to grid...")
-    total_points = len(points)
-    for i, (lat, lon, elev) in enumerate(points):
-        if i % 10000 == 0:
-            print(f"Processing points: {i}/{total_points} ({(i/total_points*100):.1f}%)")
-        x = int((lon - NM_BOUNDS['minLon']) / (NM_BOUNDS['maxLon'] - NM_BOUNDS['minLon']) * (width - 1))
-        y = int((NM_BOUNDS['maxLat'] - lat) / (NM_BOUNDS['maxLat'] - NM_BOUNDS['minLat']) * (height - 1))
-        if 0 <= x < width and 0 <= y < height:
-            grid[y, x] += elev
-            counts[y, x] += 1
+    # Convert points to numpy arrays
+    lats = np.array([p[0] for p in points])
+    lons = np.array([p[1] for p in points])
+    elevations = np.array([p[2] for p in points])
     
-    # Average points in same cell
-    mask = counts > 0
-    grid[mask] /= counts[mask]
+    # Create figure with high resolution
+    plt.figure(figsize=(20, 20), dpi=300)
     
-    # Fill empty cells using nearest neighbor interpolation
-    print("Filling empty cells...")
-    from scipy.ndimage import distance_transform_edt
-    mask = counts == 0
-    if mask.any():
-        valid_points = np.argwhere(~mask)
-        points_to_fill = np.argwhere(mask)
-        from scipy.spatial import cKDTree
-        tree = cKDTree(valid_points)
-        distances, indices = tree.query(points_to_fill)
-        grid[points_to_fill[:, 0], points_to_fill[:, 1]] = grid[valid_points[indices, 0], valid_points[indices, 1]]
+    # Calculate optimal number of contour levels based on elevation range
+    elev_range = np.max(elevations) - np.min(elevations)
+    n_levels = int(elev_range / 50)  # One contour every 50 meters
+    print(f"\nUsing {n_levels} contour levels")
     
-    # Create figure and axis
-    plt.figure(figsize=(20, 20), dpi=100)
-    ax = plt.gca()
+    # Create the contour plot with high resolution
+    plt.tricontour(lons, lats, elevations, 
+                  levels=n_levels,
+                  colors='black',
+                  linewidths=0.5)
     
-    # Create contour plot with more levels for better detail
-    print("Creating contour plot...")
-    contour = ax.contour(grid, levels=30, colors='black', linewidths=0.5)
+    # Add colored contour fill with high resolution
+    contour_filled = plt.tricontourf(lons, lats, elevations, 
+                                    levels=n_levels,
+                                    cmap='terrain')
     
-    # Remove axis ticks and labels
-    ax.set_xticks([])
-    ax.set_yticks([])
+    # Add colorbar
+    cbar = plt.colorbar(contour_filled, label='Elevation (meters)')
+    cbar.ax.tick_params(labelsize=10)
     
-    # Save the figure
-    print("Saving contour map...")
-    os.makedirs('public/images', exist_ok=True)
-    plt.savefig('public/images/contour_map_bw.png', 
-                dpi=100, 
-                bbox_inches='tight',
-                pad_inches=0.1,
-                facecolor='white',
-                edgecolor='none')
+    # Customize the plot
+    plt.title('New Mexico Elevation Contour Map', fontsize=16)
+    plt.xlabel('Longitude', fontsize=12)
+    plt.ylabel('Latitude', fontsize=12)
+    
+    # Set axis limits to New Mexico bounds
+    plt.xlim(-109.05, -103.00)  # NM longitude bounds
+    plt.ylim(31.33, 37.00)      # NM latitude bounds
+    
+    # Add grid
+    plt.grid(True, linestyle='--', alpha=0.3)
+    
+    # Save the map with maximum quality
+    print("\nSaving high-resolution contour map...")
+    plt.savefig('nm_contour_map.png', 
+                dpi=300, 
+                bbox_inches='tight')
     plt.close()
     
-    print("Black and white contour map created successfully!")
+    print("Contour map saved as nm_contour_map.png")
 
-if __name__ == '__main__':
-    points = get_elevation_data()
-    create_contour_map(points) 
+if __name__ == "__main__":
+    create_contour_map() 

@@ -114,95 +114,105 @@ app.post('/api/log', (req, res) => {
 
 app.get('/api/elevation-data', async (req, res) => {
     try {
-        const bounds = req.query.bounds ? req.query.bounds.split(',').map(Number) : null;
-        const offset = parseInt(req.query.offset) || 0;
-        const chunkSize = 1000; // Smaller chunks for more frequent updates
-        
+        const { bounds, offset = 0, collect = false } = req.query;
         if (!bounds) {
-            return res.status(400).json({ error: 'Bounds are required' });
+            return res.status(400).json({ error: 'Bounds parameter is required' });
         }
 
-        const [minLat, minLon, maxLat, maxLon] = bounds;
+        const [south, west, north, east] = bounds.split(',').map(Number);
+        if (bounds.split(',').length !== 4 || [south, west, north, east].some(isNaN)) {
+            return res.status(400).json({ error: 'Invalid bounds format. Expected: south,west,north,east' });
+        }
         
-        // Validate bounds
-        if (bounds.length !== 4 || bounds.some(isNaN)) {
-            return res.status(400).json({ 
-                error: 'Invalid bounds format. Expected: minLat,minLon,maxLat,maxLon' 
+        console.log('Getting elevation data for bounds:', { south, west, north, east, collect });
+
+        // If collect flag is true, trigger sparse point collection
+        if (collect === 'true') {
+            const { spawn } = await import('child_process');
+            const collectScript = path.join(__dirname, 'collect_sparse_points.js');
+            
+            // Spawn collection process with bounds
+            const collector = spawn('node', [
+                collectScript,
+                '--bounds', bounds,
+                '--direction=sw_to_ne'
+            ], {
+                stdio: ['ignore', 'pipe', 'pipe']
             });
+
+            // Log collection output
+            collector.stdout.on('data', (data) => {
+                console.log(`Collection output: ${data}`);
+            });
+
+            collector.stderr.on('data', (data) => {
+                console.error(`Collection error: ${data}`);
+            });
+
+            // Don't wait for collection to complete, just acknowledge it started
+            res.json({
+                success: true,
+                message: 'Started sparse point collection',
+                bounds: { south, west, north, east }
+            });
+            return;
         }
+        
+        // Generate grid key for this area
+        const gridKey = generateDbName({
+            minLat: south,
+            minLon: west,
+            maxLat: north,
+            maxLon: east
+        });
 
-        // Validate bounds are within New Mexico
-        const NM_BOUNDS = {
-            minLat: 31.20,
-            maxLat: 37.20,
-            minLon: -109.20,
-            maxLon: -102.80
-        };
-
-        // Clip bounds to New Mexico
-        const clippedBounds = {
-            minLat: Math.max(minLat, NM_BOUNDS.minLat),
-            maxLat: Math.min(maxLat, NM_BOUNDS.maxLat),
-            minLon: Math.max(minLon, NM_BOUNDS.minLon),
-            maxLon: Math.min(maxLon, NM_BOUNDS.maxLon)
-        };
-
-        // Generate grid key based on bounds
-        const gridKey = generateDbName(clippedBounds);
+        // Get database connection
         const db = getDb(gridKey);
         
-        // Get total count first
-        const countResult = db.prepare(`
-            SELECT COUNT(*) as count 
-            FROM elevation_points 
-            WHERE latitude BETWEEN ? AND ? 
-            AND longitude BETWEEN ? AND ?
-        `).get(clippedBounds.minLat, clippedBounds.maxLat, clippedBounds.minLon, clippedBounds.maxLon);
-
-        const totalPoints = countResult.count;
-        
-        // Get chunk of points
+        // Get points for the requested bounds
         const points = db.prepare(`
             SELECT latitude, longitude, elevation
             FROM elevation_points
             WHERE latitude BETWEEN ? AND ?
             AND longitude BETWEEN ? AND ?
             ORDER BY latitude, longitude
-            LIMIT ? OFFSET ?
-        `).all(
-            clippedBounds.minLat, clippedBounds.maxLat,
-            clippedBounds.minLon, clippedBounds.maxLon,
-            chunkSize, offset
-        );
-
-        // Calculate progress
-        const progress = {
-            offset: offset,
-            chunkSize: chunkSize,
-            totalPoints: totalPoints,
-            hasMore: offset + chunkSize < totalPoints,
-            percentComplete: Math.round((offset + points.length) / totalPoints * 100)
-        };
-
-        // Calculate stats for this chunk
-        const elevations = points.map(p => p.elevation).filter(e => e !== null);
-        const stats = elevations.length > 0 ? {
-            min_elevation: Math.min(...elevations),
-            max_elevation: Math.max(...elevations),
-            point_count: points.length,
-            ...progress
-        } : {
-            min_elevation: null,
-            max_elevation: null,
-            point_count: 0,
-            ...progress
-        };
-
-        res.json({ points, stats });
+            LIMIT 1000 OFFSET ?
+        `).all(south, north, west, east, parseInt(offset) || 0);
+        
+        // Get statistics
+        const stats = db.prepare(`
+            SELECT 
+                MIN(elevation) as min_elevation,
+                MAX(elevation) as max_elevation,
+                AVG(elevation) as avg_elevation,
+                COUNT(*) as total_count
+            FROM elevation_points
+            WHERE latitude BETWEEN ? AND ?
+            AND longitude BETWEEN ? AND ?
+        `).get(south, north, west, east);
+        
+        console.log(`Found ${points.length} points in bounds`);
+        
+        res.json({
+            success: true,
+            points,
+            stats: {
+                min_elevation: stats.min_elevation,
+                max_elevation: stats.max_elevation,
+                avg_elevation: stats.avg_elevation,
+                point_count: points.length,
+                total_points: stats.total_count,
+                hasMore: points.length === 1000,
+                chunkSize: 1000
+            }
+        });
         
     } catch (error) {
-        console.error('Error fetching elevation data:', error);
-        res.status(500).json({ error: error.message || 'Failed to fetch elevation data' });
+        console.error('Error getting elevation data:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 
@@ -814,79 +824,6 @@ app.post('/api/collect-points', async (req, res) => {
         
     } catch (error) {
         console.error('Error collecting points:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// API endpoint to get elevation data
-app.get('/api/elevation-data', (req, res) => {
-    try {
-        const { bounds, offset = 0 } = req.query;
-        if (!bounds) {
-            return res.status(400).json({ error: 'Bounds parameter is required' });
-        }
-
-        const [south, west, north, east] = bounds.split(',').map(Number);
-        if (bounds.split(',').length !== 4 || [south, west, north, east].some(isNaN)) {
-            return res.status(400).json({ error: 'Invalid bounds format. Expected: south,west,north,east' });
-        }
-        
-        console.log('Getting elevation data for bounds:', { south, west, north, east });
-        
-        // Generate grid key for this area
-        const gridKey = generateDbName({
-            minLat: south,
-            minLon: west,
-            maxLat: north,
-            maxLon: east
-        });
-
-        // Get database connection
-        const db = getDb(gridKey);
-        
-        // Get points for the requested bounds
-        const points = db.prepare(`
-            SELECT latitude, longitude, elevation
-            FROM elevation_points
-            WHERE latitude BETWEEN ? AND ?
-            AND longitude BETWEEN ? AND ?
-            ORDER BY latitude, longitude
-            LIMIT 1000 OFFSET ?
-        `).all(south, north, west, east, parseInt(offset) || 0);
-        
-        // Get statistics
-        const stats = db.prepare(`
-            SELECT 
-                MIN(elevation) as min_elevation,
-                MAX(elevation) as max_elevation,
-                AVG(elevation) as avg_elevation,
-                COUNT(*) as total_count
-            FROM elevation_points
-            WHERE latitude BETWEEN ? AND ?
-            AND longitude BETWEEN ? AND ?
-        `).get(south, north, west, east);
-        
-        console.log(`Found ${points.length} points in bounds`);
-        
-        res.json({
-            success: true,
-            points,
-            stats: {
-                min_elevation: stats.min_elevation,
-                max_elevation: stats.max_elevation,
-                avg_elevation: stats.avg_elevation,
-                point_count: points.length,
-                total_points: stats.total_count,
-                hasMore: points.length === 1000,
-                chunkSize: 1000
-            }
-        });
-        
-    } catch (error) {
-        console.error('Error getting elevation data:', error);
         res.status(500).json({
             success: false,
             error: error.message

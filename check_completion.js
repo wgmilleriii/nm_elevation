@@ -52,7 +52,8 @@ async function checkGridCompletion(gridX, gridY) {
             gridY,
             exists: false,
             points: 0,
-            percentComplete: 0
+            percentComplete: 0,
+            lastModified: null
         };
     }
 
@@ -61,13 +62,30 @@ async function checkGridCompletion(gridX, gridY) {
         const count = db.prepare('SELECT COUNT(*) as count FROM elevation_points').get();
         const percentComplete = (count.count / EXPECTED_POINTS) * 100;
         
+        // Get last modified time of database
+        const stats = fs.statSync(dbPath);
+        const lastModified = stats.mtime;
+        
+        // Get most recent point timestamp
+        let lastPointTime = null;
+        try {
+            const lastPoint = db.prepare('SELECT MAX(timestamp) as last_time FROM elevation_points').get();
+            if (lastPoint && lastPoint.last_time) {
+                lastPointTime = new Date(lastPoint.last_time);
+            }
+        } catch (e) {
+            console.log(`Note: Could not get last point time for ${gridX},${gridY}`);
+        }
+        
         db.close();
         return {
             gridX,
             gridY,
             exists: true,
             points: count.count,
-            percentComplete: percentComplete.toFixed(2)
+            percentComplete: percentComplete.toFixed(2),
+            lastModified,
+            lastPointTime
         };
     } catch (error) {
         console.error(`Error checking database ${gridX},${gridY}:`, error.message);
@@ -77,9 +95,25 @@ async function checkGridCompletion(gridX, gridY) {
             exists: false,
             points: 0,
             percentComplete: 0,
-            error: error.message
+            error: error.message,
+            lastModified: null,
+            lastPointTime: null
         };
     }
+}
+
+function formatTimeDiff(date) {
+    if (!date) return 'Never';
+    const now = new Date();
+    const diff = now - date;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'Just now';
 }
 
 async function main() {
@@ -124,35 +158,57 @@ async function main() {
             };
         }) : results.map(result => ({ ...result, delta: result.points }));
 
+        // Sort and categorize results
+        const complete = deltas.filter(r => r.exists && r.percentComplete >= 100);
+        const incomplete = deltas.filter(r => r.exists && r.percentComplete < 100);
+        const active = deltas.find(r => r.delta > 0);
+        const missing = deltas.filter(r => !r.exists);
+
         // Print summary
         console.log('=== SUMMARY ===');
         console.log(`Total points: ${totalPoints.toLocaleString()}`);
         console.log(`Grids with data: ${totalGrids} / ${GRID_SIZE * GRID_SIZE}`);
-        console.log(`Complete grids (≥100%): ${completeGrids}`);
+        console.log(`Complete grids: ${completeGrids}`);
+        console.log(`Incomplete grids: ${incomplete.length}`);
+        console.log(`Missing grids: ${missing.length}`);
         console.log(`Overall completion: ${((totalPoints / (EXPECTED_POINTS * GRID_SIZE * GRID_SIZE)) * 100).toFixed(2)}%\n`);
 
         // Print detailed results
-        console.log('=== DETAILED RESULTS ===');
-        console.log('Grid\tPoints\t\tCompletion\tΔ Points\tStatus');
-        console.log('----\t------\t\t----------\t--------\t------');
-        
-        for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-            const x = Math.floor(i / GRID_SIZE);
-            const y = i % GRID_SIZE;
-            const result = deltas.find(r => r.gridX === x && r.gridY === y);
-            
-            const status = !result?.exists ? '✗ Missing' :
-                          result.percentComplete >= 100 ? '✓ Complete' :
-                          '⚠ Incomplete';
-
-            const delta = result?.delta > 0 ? `+${result.delta}` : result?.delta || 0;
-            
+        console.log('=== COMPLETE GRIDS ===');
+        console.log('Grid\tPoints\t\tCompletion\tLast Updated');
+        console.log('----\t------\t\t----------\t------------');
+        complete.sort((a, b) => b.lastModified - a.lastModified).forEach(result => {
             console.log(
-                `${x},${y}\t` +
-                `${(result?.points || 0).toLocaleString().padEnd(8)}\t` +
-                `${result?.percentComplete || '0.00'}%\t\t` +
-                `${delta.toString().padEnd(8)}\t` +
-                status
+                `${result.gridX},${result.gridY}\t` +
+                `${result.points.toLocaleString().padEnd(8)}\t` +
+                `${result.percentComplete}%\t\t` +
+                formatTimeDiff(result.lastModified)
+            );
+        });
+
+        console.log('\n=== INCOMPLETE GRIDS ===');
+        console.log('Grid\tPoints\t\tCompletion\tΔ Points\tLast Updated');
+        console.log('----\t------\t\t----------\t--------\t------------');
+        incomplete.sort((a, b) => b.percentComplete - a.percentComplete).forEach(result => {
+            console.log(
+                `${result.gridX},${result.gridY}\t` +
+                `${result.points.toLocaleString().padEnd(8)}\t` +
+                `${result.percentComplete}%\t\t` +
+                `${result.delta > 0 ? '+' + result.delta : result.delta}\t\t` +
+                formatTimeDiff(result.lastModified)
+            );
+        });
+
+        if (active) {
+            console.log('\n=== CURRENTLY ACTIVE ===');
+            console.log('Grid\tPoints\t\tCompletion\tΔ Points\tLast Point');
+            console.log('----\t------\t\t----------\t--------\t----------');
+            console.log(
+                `${active.gridX},${active.gridY}\t` +
+                `${active.points.toLocaleString().padEnd(8)}\t` +
+                `${active.percentComplete}%\t\t` +
+                `+${active.delta}\t\t` +
+                formatTimeDiff(active.lastPointTime)
             );
         }
 

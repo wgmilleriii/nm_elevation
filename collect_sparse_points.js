@@ -3,7 +3,7 @@ import fetch from 'node-fetch';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
-import { findNextDatabase, removeLock } from './check_and_lock_db.js';
+import { findNextDatabase, removeLockFile as removeLock } from './check_and_lock_db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +12,14 @@ const __dirname = path.dirname(__filename);
 const DEFAULT_BATCH_SIZE = 25;  // Default batch size
 const MAX_BATCH_SIZE = 100;  // Maximum batch size we'll ever use
 
+// New Mexico bounds
+const NM_BOUNDS = {
+    minLat: 31.33,
+    maxLat: 37.00,
+    minLon: -109.05,
+    maxLon: -103.00
+};
+
 // Collection direction configuration
 const COLLECTION_DIRECTIONS = {
     SOUTHWEST_TO_NORTHEAST: 'sw_to_ne',
@@ -19,9 +27,13 @@ const COLLECTION_DIRECTIONS = {
 };
 
 // Get direction from command line argument or environment variable
-const collectionDirection = process.argv.includes('--direction=ne_to_sw') 
+const args = process.argv.slice(2);
+const boundsArg = args.find(arg => arg.startsWith('--bounds='));
+const bounds = boundsArg ? parseBounds(boundsArg.split('=')[1]) : NM_BOUNDS;
+
+const collectionDirection = args.includes('--direction=ne_to_sw') 
     ? COLLECTION_DIRECTIONS.NORTHEAST_TO_SOUTHWEST 
-    : process.argv.includes('--direction=sw_to_ne')
+    : args.includes('--direction=sw_to_ne')
         ? COLLECTION_DIRECTIONS.SOUTHWEST_TO_NORTHEAST
         : process.env.COLLECTION_DIRECTION || COLLECTION_DIRECTIONS.SOUTHWEST_TO_NORTHEAST;
 
@@ -34,14 +46,6 @@ const API_BATCH_SIZES = {
 const DELAY_MS = 2000;  // 2 second delay between batches
 const REQUEST_TIMEOUT = 15000;  // 15 second timeout
 const POINTS_TO_COLLECT = 1000;  // Reduced to 1k points for lower resolution
-
-// New Mexico bounds
-const NM_BOUNDS = {
-    minLat: 31.33,
-    maxLat: 37.00,
-    minLon: -109.05,
-    maxLon: -103.00
-};
 
 // API configurations - using batch-capable APIs
 const APIS = [
@@ -380,7 +384,7 @@ async function fetchElevations(points, api) {
 }
 
 // Modify collectHierarchicalPoints to handle different directions
-async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS, parentI = 0, parentJ = 0) {
+async function collectHierarchicalPoints(db, dbPath, level = 0, parentBounds = NM_BOUNDS, parentI = 0, parentJ = 0) {
     if (level >= GRID_LEVELS.length) {
         return;
     }
@@ -498,7 +502,7 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
 
             for (const i of iRange) {
                 for (const j of jRange) {
-                    await collectHierarchicalPoints(db, level + 1, bounds, i, j);
+                    await collectHierarchicalPoints(db, dbPath, level + 1, bounds, i, j);
                 }
             }
         }
@@ -508,66 +512,150 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
     }
 }
 
-// Standardize database schema
-const DB_SCHEMA = `
-    CREATE TABLE IF NOT EXISTS points (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        lat REAL NOT NULL,
-        lon REAL NOT NULL,
-        elevation REAL,
-        source TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_lat_lon ON points(lat, lon);
-    
-    CREATE TABLE IF NOT EXISTS grid_progress (
-        grid_size INTEGER,
-        cell_i INTEGER,
-        cell_j INTEGER,
-        points_collected INTEGER DEFAULT 0,
-        PRIMARY KEY (grid_size, cell_i, cell_j)
-    );
-`;
+// Function to save a batch of points to the database
+async function saveBatch(db, points, dbPath) {
+    let gridDb = null;
+    try {
+        const insertPoint = db.prepare(`
+            INSERT OR REPLACE INTO points (
+                lat, lon, elevation, source, timestamp
+            ) VALUES (?, ?, ?, ?, ?)
+        `);
 
-// Update initializeDatabase function
-async function initializeDatabase(dbPath) {
-    const db = new Database(dbPath);
-    db.exec(DB_SCHEMA);
-    return db;
+        const insertProgress = db.prepare(`
+            INSERT OR REPLACE INTO grid_progress (
+                grid_size, cell_i, cell_j, points_collected
+            ) VALUES (?, ?, ?, ?)
+        `);
+
+        // Begin transaction for coordinate-based database
+        db.exec('BEGIN TRANSACTION');
+
+        // Insert each point into coordinate-based database
+        for (const point of points) {
+            insertPoint.run(
+                point.lat,
+                point.lon,
+                point.elevation,
+                point.source,
+                new Date().toISOString()
+            );
+        }
+
+        // Commit transaction for coordinate-based database
+        db.exec('COMMIT');
+
+        // Now save to grid-based database
+        // Use the first point to determine the grid database name
+        const firstPoint = points[0];
+        const gridDbPath = path.join(__dirname, 'grid_databases', `mountains_${Math.floor(firstPoint.lat)}_${Math.floor(firstPoint.lon)}.db`);
+        gridDb = new Database(gridDbPath, { fileMustExist: false });
+        
+        // Initialize grid database if needed
+        initializeDatabase(gridDb);
+        
+        // Begin transaction for grid database
+        gridDb.exec('BEGIN TRANSACTION');
+        
+        const gridInsertPoint = gridDb.prepare(`
+            INSERT OR REPLACE INTO points (
+                lat, lon, elevation, source, timestamp
+            ) VALUES (?, ?, ?, ?, ?)
+        `);
+
+        // Insert each point into grid database
+        for (const point of points) {
+            gridInsertPoint.run(
+                point.lat,
+                point.lon,
+                point.elevation,
+                point.source,
+                new Date().toISOString()
+            );
+        }
+
+        // Commit transaction for grid database
+        gridDb.exec('COMMIT');
+        gridDb.close();
+
+        logDatabaseStatus(dbPath, `Saved ${points.length} points to both coordinate and grid databases`);
+    } catch (error) {
+        // Rollback on error for coordinate database
+        db.exec('ROLLBACK');
+        
+        // If grid database exists and is open, rollback and close it
+        if (gridDb && gridDb.open) {
+            gridDb.exec('ROLLBACK');
+            gridDb.close();
+        }
+        
+        throw error;
+    }
 }
 
-async function getProgress(db, gridSize) {
-    const stmt = db.prepare('SELECT SUM(points_collected) as total FROM grid_progress WHERE grid_size = ?');
-    const result = stmt.get(gridSize);
-    return result.total || 0;
-}
+// Function to initialize database tables
+function initializeDatabase(db) {
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS points (
+            lat REAL,
+            lon REAL,
+            elevation REAL,
+            source TEXT,
+            timestamp TEXT,
+            PRIMARY KEY (lat, lon)
+        );
 
-async function updateProgress(db, gridSize, i, j, pointsCollected) {
-    const stmt = db.prepare(`
-        INSERT INTO grid_progress (grid_size, cell_i, cell_j, points_collected)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT (grid_size, cell_i, cell_j)
-        DO UPDATE SET points_collected = points_collected + ?
+        CREATE TABLE IF NOT EXISTS grid_progress (
+            grid_size INTEGER,
+            cell_i INTEGER,
+            cell_j INTEGER,
+            points_collected INTEGER DEFAULT 0,
+            PRIMARY KEY (grid_size, cell_i, cell_j)
+        );
     `);
-    stmt.run(gridSize, i, j, pointsCollected, pointsCollected);
 }
 
+// Function to generate database name from bounds
+function generateDbName(bounds) {
+    const { minLat, minLon, maxLat, maxLon } = bounds;
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLon = (minLon + maxLon) / 2;
+    return `elevation_${centerLat.toFixed(4)}_${centerLon.toFixed(4)}.db`;
+}
+
+// Function to parse bounds from command line argument
+function parseBounds(boundsStr) {
+    const [south, west, north, east] = boundsStr.split(',').map(Number);
+    return {
+        minLat: south,
+        minLon: west,
+        maxLat: north,
+        maxLon: east
+    };
+}
+
+// Function to check if a point exists in the database
 function checkPointExists(db, lat, lon) {
-    // Use ROUND to handle floating-point precision issues
-    const stmt = db.prepare('SELECT COUNT(*) as count FROM points WHERE ROUND(lat, 6) = ROUND(?, 6) AND ROUND(lon, 6) = ROUND(?, 6)');
-    const result = stmt.get(lat, lon);
+    const result = db.prepare('SELECT COUNT(*) as count FROM points WHERE lat = ? AND lon = ?').get(lat, lon);
     return result.count > 0;
 }
 
-async function loadEnhanceBounds() {
-    const boundsFile = path.join(__dirname, 'enhance_bounds.json');
-    if (fs.existsSync(boundsFile)) {
-        const bounds = JSON.parse(fs.readFileSync(boundsFile));
-        // Delete the file so we don't reuse it
-        fs.unlinkSync(boundsFile);
-        return bounds;
+// Function to log database status
+function logDatabaseStatus(dbPath, message, data = {}) {
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} - ${message} - DB: ${path.basename(dbPath)} - ${JSON.stringify(data)}\n`;
+    fs.appendFileSync('database_status.log', logEntry);
+    console.log(message, data);
+}
+
+// Function to log source distribution
+function logSourceDistribution(db, dbPath) {
+    try {
+        const sources = db.prepare('SELECT source, COUNT(*) as count FROM points GROUP BY source').all();
+        logDatabaseStatus(dbPath, 'Source distribution', { sources });
+    } catch (error) {
+        console.error('Error getting source distribution:', error);
     }
-    return null;
 }
 
 // Create necessary directories
@@ -639,60 +727,51 @@ async function findMostIncompleteDatabase() {
 // Modify main function to include enhanced logging
 async function main() {
     try {
-        // Find the next database to process without locking
-        const db = await findMostIncompleteDatabase();
-        if (!db) {
-            console.log('No available databases to process.');
-            return;
+        // Create grid_databases directory if it doesn't exist
+        const dbDir = path.join(__dirname, 'grid_databases');
+        if (!fs.existsSync(dbDir)) {
+            fs.mkdirSync(dbDir, { recursive: true });
         }
 
-        const dbPath = path.join(GRID_DB_DIR, `mountains_${db.x}_${db.y}.db`);
+        // Parse bounds from command line argument
+        const args = process.argv.slice(2);
+        const boundsArg = args.find(arg => arg.startsWith('--bounds='));
+        const bounds = boundsArg ? parseBounds(boundsArg.split('=')[1]) : NM_BOUNDS;
+
+        // Generate database name based on bounds
+        const dbName = generateDbName(bounds);
+        const dbPath = path.join(dbDir, dbName);
+
+        // Create database connection with write permissions
+        const database = new Database(dbPath, { fileMustExist: false });
+
+        // Initialize database schema
+        initializeDatabase(database);
+
+        // Log initial state
         logDatabaseStatus(dbPath, 'Starting processing');
-        
-        // Initialize database connection
-        const database = new Database(dbPath);
+        const result = database.prepare('SELECT COUNT(*) as count FROM points').get();
+        logDatabaseStatus(dbPath, 'Initial state', {
+            currentPoints: result.count,
+            remaining: 10000 - result.count
+        });
+        logSourceDistribution(database, dbPath);
 
-        try {
-            // Check current point count
-            const result = database.prepare('SELECT COUNT(*) as count FROM points').get();
-            const currentPoints = result.count;
-            
-            logDatabaseStatus(dbPath, 'Initial state', {
-                currentPoints,
-                remaining: 10000 - currentPoints
-            });
-            
-            if (currentPoints >= 10000) {
-                logDatabaseStatus(dbPath, 'Database complete', {
-                    points: currentPoints
-                });
-                return;
-            }
+        // Process the database
+        await collectHierarchicalPoints(database, dbPath, 0, bounds);
 
-            // Log initial source distribution
-            logSourceDistribution(database, dbPath);
-            
-            // Process the database
-            await collectHierarchicalPoints(database, 0, NM_BOUNDS, db.x, db.y);
-            
-            // Final check and logging
-            const finalResult = database.prepare('SELECT COUNT(*) as count FROM points').get();
-            logDatabaseStatus(dbPath, 'Processing complete', {
-                finalPoints: finalResult.count,
-                targetMet: finalResult.count >= 10000 ? 'Yes' : 'No'
-            });
-            
-            // Log final source distribution
-            logSourceDistribution(database, dbPath);
-            
-        } finally {
-            await database.close();
-            logDatabaseStatus(dbPath, 'Database connection closed');
-        }
+        // Final check and logging
+        const finalResult = database.prepare('SELECT COUNT(*) as count FROM points').get();
+        logDatabaseStatus(dbPath, 'Collection complete', {
+            points: finalResult.count
+        });
 
+        // Close database connection
+        database.close();
+        logDatabaseStatus(dbPath, 'Database connection closed');
     } catch (error) {
         console.error('Error in main:', error);
-        logError(error, 'Error in main process');
+        fs.appendFileSync('collection_errors.log', `Error in main process: ${error.message}\n${error.stack}\n`);
     }
 }
 
