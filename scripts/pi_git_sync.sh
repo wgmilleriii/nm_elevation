@@ -12,7 +12,7 @@ check_if_pi() {
     fi
 }
 
-# Function to restart the collect sparse points service
+# Function to restart the service
 restart_service() {
     echo "Restarting nm-elevation service..."
     sudo systemctl restart nm-elevation.service
