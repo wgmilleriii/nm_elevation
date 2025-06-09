@@ -3,7 +3,8 @@ import fetch from 'node-fetch';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
-import { findNextDatabase, removeLockFile as removeLock } from './check_and_lock_db.js';
+import { findNextDatabase, removeLockFile as removeLock, acquireLock, releaseLock } from './check_and_lock_db.js';
+import { cleanupStaleLocks, findIncompleteDatabase } from './db_manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -727,51 +728,97 @@ async function findMostIncompleteDatabase() {
 // Modify main function to include enhanced logging
 async function main() {
     try {
-        // Create grid_databases directory if it doesn't exist
-        const dbDir = path.join(__dirname, 'grid_databases');
-        if (!fs.existsSync(dbDir)) {
-            fs.mkdirSync(dbDir, { recursive: true });
+        // Clean up any stale locks first
+        cleanupStaleLocks();
+
+        // Find the next database to process
+        const nextTarget = findIncompleteDatabase();
+        
+        if (!nextTarget) {
+            console.log('No incomplete databases or queued areas found');
+            process.exit(0);
         }
 
-        // Parse bounds from command line argument
-        const args = process.argv.slice(2);
-        const boundsArg = args.find(arg => arg.startsWith('--bounds='));
-        const bounds = boundsArg ? parseBounds(boundsArg.split('=')[1]) : NM_BOUNDS;
+        let database, dbPath, bounds;
+        
+        if (nextTarget.type === 'queued') {
+            // Process queued area
+            bounds = nextTarget.bounds;
+            const dbName = generateDbName(bounds);
+            dbPath = path.join(GRID_DB_DIR, dbName);
+            
+            // Try to acquire lock
+            if (!acquireLock(dbPath)) {
+                console.log(`Database ${dbPath} is locked, skipping`);
+                process.exit(0);
+            }
+            
+            database = new Database(dbPath, { fileMustExist: false });
+            initializeDatabase(database);
+        } else {
+            // Process incomplete database
+            dbPath = nextTarget.database.path;
+            
+            // Try to acquire lock
+            if (!acquireLock(dbPath)) {
+                console.log(`Database ${dbPath} is locked, skipping`);
+                process.exit(0);
+            }
+            
+            database = new Database(dbPath);
+            bounds = NM_BOUNDS; // Use default bounds for existing database
+        }
 
-        // Generate database name based on bounds
-        const dbName = generateDbName(bounds);
-        const dbPath = path.join(dbDir, dbName);
+        try {
+            // Log initial state
+            logDatabaseStatus(dbPath, 'Starting processing');
+            const result = database.prepare('SELECT COUNT(*) as count FROM points').get();
+            logDatabaseStatus(dbPath, 'Initial state', {
+                currentPoints: result.count,
+                remaining: 10000 - result.count
+            });
+            logSourceDistribution(database, dbPath);
 
-        // Create database connection with write permissions
-        const database = new Database(dbPath, { fileMustExist: false });
+            // If we already have enough points, exit successfully
+            if (result.count >= 10000) {
+                logDatabaseStatus(dbPath, 'Collection already complete', {
+                    points: result.count
+                });
+                database.close();
+                releaseLock(dbPath);
+                logDatabaseStatus(dbPath, 'Database connection closed');
+                process.exit(0);
+            }
 
-        // Initialize database schema
-        initializeDatabase(database);
+            // Process the database
+            await collectHierarchicalPoints(database, dbPath, 0, bounds);
 
-        // Log initial state
-        logDatabaseStatus(dbPath, 'Starting processing');
-        const result = database.prepare('SELECT COUNT(*) as count FROM points').get();
-        logDatabaseStatus(dbPath, 'Initial state', {
-            currentPoints: result.count,
-            remaining: 10000 - result.count
-        });
-        logSourceDistribution(database, dbPath);
+            // Final check and logging
+            const finalResult = database.prepare('SELECT COUNT(*) as count FROM points').get();
+            logDatabaseStatus(dbPath, 'Collection complete', {
+                points: finalResult.count
+            });
 
-        // Process the database
-        await collectHierarchicalPoints(database, dbPath, 0, bounds);
+            // Close database and release lock
+            database.close();
+            releaseLock(dbPath);
+            logDatabaseStatus(dbPath, 'Database connection closed');
 
-        // Final check and logging
-        const finalResult = database.prepare('SELECT COUNT(*) as count FROM points').get();
-        logDatabaseStatus(dbPath, 'Collection complete', {
-            points: finalResult.count
-        });
-
-        // Close database connection
-        database.close();
-        logDatabaseStatus(dbPath, 'Database connection closed');
+            // Exit with success if we have enough points
+            if (finalResult.count >= 10000) {
+                process.exit(0);
+            } else {
+                process.exit(1);
+            }
+        } catch (error) {
+            // Make sure we release the lock on error
+            releaseLock(dbPath);
+            throw error;
+        }
     } catch (error) {
         console.error('Error in main:', error);
         fs.appendFileSync('collection_errors.log', `Error in main process: ${error.message}\n${error.stack}\n`);
+        process.exit(1);
     }
 }
 

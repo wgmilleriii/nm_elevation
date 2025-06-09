@@ -11,6 +11,36 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.NODE_ENV === 'test' ? 3001 : 3000;
 
+// Basic security headers
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    next();
+});
+
+// Rate limiting
+const requestCounts = new Map();
+const RATE_LIMIT = 100; // requests
+const RATE_WINDOW = 60 * 1000; // 1 minute in milliseconds
+
+app.use((req, res, next) => {
+    const ip = req.ip;
+    const now = Date.now();
+    const userRequests = requestCounts.get(ip) || [];
+    
+    // Remove old requests outside the current window
+    const recentRequests = userRequests.filter(time => time > now - RATE_WINDOW);
+    
+    if (recentRequests.length >= RATE_LIMIT) {
+        return res.status(429).json({ error: 'Too many requests, please try again later' });
+    }
+    
+    recentRequests.push(now);
+    requestCounts.set(ip, recentRequests);
+    next();
+});
+
 // Middleware
 app.use(express.static('public'));
 app.use(express.json());
@@ -831,8 +861,41 @@ app.post('/api/collect-points', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+app.get('/api/ip-info', (req, res) => {
+    const clientIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    res.json({
+        clientIP,
+        serverTime: new Date().toISOString(),
+        message: 'Server is accessible!'
+    });
+});
+
+app.post('/api/queue', express.json(), (req, res) => {
+    const { data } = req.body;
+    if (!data) {
+        return res.status(400).json({ error: 'Data is required' });
+    }
+
+    try {
+        // Ensure the queue file exists
+        const queueFile = path.join(__dirname, 'public_queue.txt');
+        const entry = JSON.stringify({
+            timestamp: new Date().toISOString(),
+            data,
+            clientIP: req.ip
+        }) + '\n';
+        
+        fs.appendFileSync(queueFile, entry);
+        
+        res.json({ success: true, message: 'Added to queue' });
+    } catch (error) {
+        console.error('Error writing to queue:', error);
+        res.status(500).json({ error: 'Failed to write to queue' });
+    }
+});
+
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Server running at http://0.0.0.0:${port}`);
     console.log('Current directory:', __dirname);
     console.log('Grid databases directory:', GRID_DB_DIR);
     console.log('Grid databases directory exists:', fs.existsSync(GRID_DB_DIR));

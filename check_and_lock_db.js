@@ -17,13 +17,47 @@ const LOG_DIR = path.join(__dirname, 'logs');
     }
 });
 
-export async function findNextDatabase() {
-    return { success: true };
+export function findNextDatabase() {
+    const files = fs.readdirSync(DB_DIR);
+    for (const file of files) {
+        if (!file.endsWith('.db')) continue;
+        const dbPath = path.join(DB_DIR, file);
+        const lockFile = getLockFile(dbPath);
+        if (!fs.existsSync(lockFile)) {
+            return dbPath;
+        }
+    }
+    return null;
 }
 
-export async function removeLockFile(x, y) {
-    return;
+export function getLockFile(dbPath) {
+    const dbName = path.basename(dbPath);
+    return path.join(LOCK_DIR, `${dbName}.lock`);
 }
+
+export function acquireLock(dbPath) {
+    const lockFile = getLockFile(dbPath);
+    try {
+        fs.writeFileSync(lockFile, new Date().toISOString());
+        return true;
+    } catch (error) {
+        console.error(`Failed to acquire lock for ${dbPath}:`, error);
+        return false;
+    }
+}
+
+export function removeLockFile(dbPath) {
+    const lockFile = getLockFile(dbPath);
+    try {
+        if (fs.existsSync(lockFile)) {
+            fs.unlinkSync(lockFile);
+        }
+    } catch (error) {
+        console.error(`Failed to remove lock for ${dbPath}:`, error);
+    }
+}
+
+export { removeLockFile as releaseLock };
 
 export function checkAndLockDb(dbPath) {
     return true;
@@ -42,7 +76,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     findNextDatabase()
         .then(db => {
             if (db) {
-                console.log(`Next database to process: ${db.name}`);
+                console.log(`Next database to process: ${db}`);
                 process.exit(0);
             } else {
                 console.log('No available databases to process');

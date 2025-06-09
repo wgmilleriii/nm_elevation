@@ -8,16 +8,13 @@
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
+    <!-- Our CSS -->
+    <link rel="stylesheet" href="css/main.css" />
+    
     <!-- Load scripts in correct order with defer -->
     <script defer src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
     <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <!-- Our custom files -->
-    <link rel="stylesheet" href="css/face.css" />
-    <script defer type="module" src="js/cities.js"></script>
-    <script defer type="module" src="js/logger.js"></script>
-    <script defer type="module" src="js/svgUtils.js"></script>
-    <script defer type="module" src="js/face.js"></script>
+    <script defer src="js/main.js"></script>
     
     <style>
         body {
@@ -40,6 +37,7 @@
             border: 1px solid #ddd;
             background: white;
             margin-bottom: 20px;
+            position: relative;
         }
         #map {
             width: 100%;
@@ -71,46 +69,114 @@
             margin-right: 10px;
             background: linear-gradient(to right, #0000ff, #ffff00);
         }
-        .resolution-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
+        .button {
             padding: 8px 16px;
             background: #4CAF50;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            margin: 5px;
         }
-        .resolution-toggle:hover {
+        .button:hover {
             background: #45a049;
+        }
+        #selection-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
     </style>
 </head>
 <body>
     <div id="container">
-        <button id="resolution-toggle" class="resolution-toggle" onclick="toggleResolution()">Switch to Low Resolution</button>
+        <div class="controls">
+            <button id="resolution-toggle" class="button">Switch to Low Resolution</button>
+            <button id="locate-me" class="button">Find My Location</button>
+            <button id="chicago-button" class="button">Go to Chicago</button>
+        </div>
         <div class="legend">
             <div class="legend-gradient"></div>
             <span>Low → High Elevation</span>
         </div>
         <div id="map"></div>
-        <svg id="visualization" preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="visualization">
+            <canvas id="selection-canvas"></canvas>
+            <svg preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
         <div id="stats"></div>
     </div>
     
     <script>
-        // Ensure Leaflet is loaded before initializing
+        let map = null;
+        let currentResolution = 'high';
+
+        // Initialize map and visualization when everything is loaded
         window.addEventListener('load', () => {
             if (!window.L) {
                 console.error('Leaflet not loaded properly');
                 return;
             }
+            
+            // Initialize map only if not already initialized
+            if (!map) {
+                map = L.map('map').setView([34.5, -106], 7); // Center of NM
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+            }
+
+            // Add locate me button functionality
+            document.getElementById('locate-me').addEventListener('click', () => {
+                if ("geolocation" in navigator) {
+                    navigator.geolocation.getCurrentPosition((position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        
+                        // Check if location is within New Mexico bounds
+                        if (lat >= 31.33 && lat <= 37.00 && lon >= -109.05 && lon <= -103.00) {
+                            map.setView([lat, lon], 12); // Zoom level 12 for local view
+                            
+                            // Add a marker for current location
+                            L.marker([lat, lon])
+                                .addTo(map)
+                                .bindPopup('You are here!')
+                                .openPopup();
+                        } else {
+                            alert('Your location is outside New Mexico. Showing the full state.');
+                            map.setView([34.5, -106], 7);
+                        }
+                    }, (error) => {
+                        console.error('Error getting location:', error);
+                        alert('Could not get your location. Please check your browser settings.');
+                    });
+                } else {
+                    alert('Geolocation is not supported by your browser');
+                }
+            });
+
+            // Initialize canvas
+            const canvas = document.getElementById('selection-canvas');
+            if (canvas) {
+                const container = document.getElementById('visualization');
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+            }
+            
             // Initialize visualization
             visualizeData();
         });
-
-        let currentResolution = 'high';
 
         async function fetchData() {
             const response = await fetch(`/api/elevation-data${currentResolution === 'high' ? '?resolution=high' : ''}`);
@@ -137,15 +203,20 @@
 
         async function visualizeData() {
             const { points, stats } = await fetchData();
-            const svg = document.getElementById('visualization');
+            const container = document.getElementById('visualization');
+            const svg = container.querySelector('svg');
             
             // Clear existing points
             svg.innerHTML = '';
             
             // Calculate dimensions
-            const width = svg.clientWidth;
-            const height = svg.clientHeight;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
             const padding = 20;
+            
+            // Set SVG dimensions
+            svg.setAttribute('width', width);
+            svg.setAttribute('height', height);
             
             // Find bounds
             const minLat = 31.33;

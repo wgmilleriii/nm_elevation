@@ -732,12 +732,23 @@ function renderSVG(points, stats) {
 
 function setupRectangleSelection(map) {
     const canvas = document.getElementById('selection-canvas');
+    if (!canvas) {
+        mapLogger.error('Selection canvas not found');
+        return;
+    }
+    
     const mapContainer = map.getContainer();
+    if (!mapContainer) {
+        mapLogger.error('Map container not found');
+        return;
+    }
     
     // Set canvas size to match map container
     function resizeCanvas() {
-        canvas.width = mapContainer.clientWidth;
-        canvas.height = mapContainer.clientHeight;
+        if (canvas && mapContainer) {
+            canvas.width = mapContainer.clientWidth;
+            canvas.height = mapContainer.clientHeight;
+        }
     }
     
     // Initial resize
@@ -968,17 +979,19 @@ class ElevationViewer {
                 }).addTo(this.map);
 
                 // Initialize gather elevation button
-                const gatherButton = document.getElementById('gather-elevation');
-                gatherButton.addEventListener('click', async () => {
-                    if (gatherButton.classList.contains('gathering')) return;
-                    await this.gatherElevationData();
-                });
-
-                // Add city markers and labels
-                this.addCityMarkers();
-
-                // Initialize the selection canvas after map is ready
                 this.map.whenReady(() => {
+                    const gatherButton = document.getElementById('gather-elevation');
+                    if (gatherButton) {
+                        gatherButton.addEventListener('click', async () => {
+                            if (gatherButton.classList.contains('gathering')) return;
+                            await this.gatherElevationData();
+                        });
+                    }
+
+                    // Add city markers and labels
+                    this.addCityMarkers();
+
+                    // Initialize the selection canvas after map is ready
                     setupRectangleSelection(this.map);
                     mapLogger.log('Rectangle selection initialized');
                     
