@@ -25,6 +25,36 @@ restart_service() {
     fi
 }
 
+# Function to safely add and commit changes
+safe_commit() {
+    local dir=$1
+    local message=$2
+    
+    # Check if there are any files to add
+    if [ -z "$(ls -A $dir 2>/dev/null)" ]; then
+        echo "No files found in $dir - skipping"
+        return 0
+    fi
+    
+    # Add files one by one to avoid unstable object issues
+    for file in "$dir"/*; do
+        if [ -f "$file" ]; then
+            echo "Adding file: $file"
+            git add "$file"
+        fi
+    done
+    
+    # Check if there are changes to commit
+    if git diff --cached --quiet; then
+        echo "No changes to commit"
+        return 0
+    else
+        # Commit changes
+        git commit -m "$message"
+        return $?
+    fi
+}
+
 # Main script execution
 if ! check_if_pi; then
     echo "This script must be run on the specific Raspberry Pi setup"
@@ -39,17 +69,31 @@ cd /home/raspberry/projects/nm_elevation || {
 
 echo "Running on Raspberry Pi - proceeding with sync operations..."
 
+# Create grid_databases directory if it doesn't exist
+mkdir -p grid_databases
+
 # Store current Git hash to check for changes
 BEFORE_PULL_HASH=$(git rev-parse HEAD)
 
-# Push database changes
-echo "Pushing database changes..."
-git add data/*.json
-git commit -m "Auto-update: Database sync from Pi $(date '+%Y-%m-%d %H:%M:%S')" || true
-git push
+# First, pull any changes to avoid conflicts
+echo "Pulling latest changes first..."
+git pull
 
-# Pull new changes
-echo "Pulling new changes..."
+# Push database changes if any exist
+echo "Checking for database changes..."
+if safe_commit "grid_databases" "Auto-update: Database sync from Pi $(date '+%Y-%m-%d %H:%M:%S')"; then
+    echo "Pushing changes..."
+    git push || {
+        echo "Push failed - will try again next time"
+        exit 1
+    }
+else
+    echo "Commit failed - will try again next time"
+    exit 1
+fi
+
+# Pull new changes again to ensure we're up to date
+echo "Pulling final changes..."
 git pull
 
 # Check if there were any changes
