@@ -144,13 +144,22 @@
       legend.innerHTML += `<span class="legend-label">Low (${Math.round(minElev)}m)</span> → <span class="legend-label">High (${Math.round(maxElev)}m)</span>`;
     }
 
-    fetch('elevation_cache_reduced.json')
+    // Get elevation data from API
+    const bounds = {
+        south: 34.9,
+        west: -106.9,
+        north: 35.2,
+        east: -106.3
+    };
+
+    fetch(`/api/elevation-data?bounds=${bounds.south},${bounds.west},${bounds.north},${bounds.east}`)
       .then(res => res.json())
       .then(data => {
-        const points = Object.entries(data).map(([key, elev]) => {
-          const [lat, lon] = key.split(',').map(Number);
-          return { lat, lon, elev };
-        });
+        const points = data.points.map(p => ({
+          lat: p.latitude,
+          lon: p.longitude,
+          elev: p.elevation
+        }));
         if (points.length === 0) return;
 
         console.log('Total points:', points.length); // Debug log

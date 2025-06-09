@@ -33,8 +33,12 @@ class App {
         this.debug.info('MapManager initialized');
         
         this.initializeEventListeners();
-        this.loadElevationData();
-        this.loadDatabaseStats();
+        
+        // Wait for map to be ready before loading data
+        this.mapManager.map.once('load', () => {
+            this.loadElevationData();
+            this.loadDatabaseStats();
+        });
     }
 
     async loadDatabaseStats() {
@@ -58,12 +62,27 @@ class App {
     async loadElevationData() {
         try {
             this.debug.verbose('Fetching elevation data...');
-            const response = await fetch('data/elevation_cache_reduced.json');
+            // Wait for map to be initialized
+            if (!this.mapManager || !this.mapManager.map) {
+                throw new Error('Map not initialized yet');
+            }
+            const bounds = this.mapManager.map.getBounds();
+            const response = await fetch(
+                `/api/elevation-data?bounds=${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`
+            );
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            const elevationData = await response.json();
-            this.debug.info(`Loaded ${Object.keys(elevationData).length} elevation points`);
+            
+            const data = await response.json();
+            this.debug.info(`Loaded ${data.points.length} elevation points`);
+            
+            // Convert points array to the format expected by visualization
+            const elevationData = {};
+            data.points.forEach(point => {
+                elevationData[`${point.latitude},${point.longitude}`] = point.elevation;
+            });
             
             this.visualization.processData(elevationData);
             
@@ -99,10 +118,26 @@ class App {
             waitForElements();
         } catch (error) {
             this.debug.error('Error loading elevation data:', error);
-            this.svg.innerHTML = `
-                <text x="20" y="40" fill="red">Error loading data: ${error.message}</text>
-                <text x="20" y="60" fill="blue">Please ensure elevation_cache_reduced.json exists in the data directory</text>
-            `;
+            // Clear existing content
+            while (this.svg.firstChild) {
+                this.svg.removeChild(this.svg.firstChild);
+            }
+            
+            // Create SVG text elements properly
+            const errorText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            errorText.setAttribute("x", "20");
+            errorText.setAttribute("y", "40");
+            errorText.setAttribute("fill", "red");
+            errorText.textContent = `Error loading data: ${error.message}`;
+            
+            const helpText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            helpText.setAttribute("x", "20");
+            helpText.setAttribute("y", "60");
+            helpText.setAttribute("fill", "blue");
+            helpText.textContent = "Please ensure the server is running and accessible";
+            
+            this.svg.appendChild(errorText);
+            this.svg.appendChild(helpText);
         }
     }
 

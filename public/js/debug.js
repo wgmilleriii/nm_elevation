@@ -44,13 +44,7 @@ export class DebugTerminal {
             checkboxGroup.appendChild(label);
         });
         
-        // Create toggle button
-        const toggleBtn = document.createElement('button');
-        toggleBtn.className = 'debug-toggle';
-        toggleBtn.textContent = 'Hide';
-        
         controls.appendChild(checkboxGroup);
-        controls.appendChild(toggleBtn);
         
         header.appendChild(title);
         header.appendChild(controls);
@@ -63,26 +57,48 @@ export class DebugTerminal {
         this.container.appendChild(header);
         this.container.appendChild(this.content);
         
+        // Create global toggle button
+        this.globalToggle = document.createElement('button');
+        this.globalToggle.id = 'debug-global-toggle';
+        this.globalToggle.textContent = 'Debug';
+        
         // Add to document
         document.body.appendChild(this.container);
+        document.body.appendChild(this.globalToggle);
+        
+        // Initial state
+        this.container.classList.add('hidden');
     }
     
     attachEventListeners() {
-        // Toggle visibility
-        const toggleBtn = this.container.querySelector('.debug-toggle');
-        toggleBtn.addEventListener('click', () => {
-            this.container.classList.toggle('hidden');
-            toggleBtn.textContent = this.container.classList.contains('hidden') ? 'Show' : 'Hide';
+        // Toggle visibility using header or global toggle
+        this.container.querySelector('.debug-header').addEventListener('click', () => {
+            this.toggleVisibility();
+        });
+        
+        this.globalToggle.addEventListener('click', () => {
+            this.toggleVisibility();
         });
         
         // Level toggles
         this.container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
             checkbox.addEventListener('change', (e) => {
+                e.stopPropagation(); // Prevent header click
                 const level = e.target.dataset.level;
                 this.settings[level] = e.target.checked;
                 this.updateVisibility();
             });
         });
+        
+        // Prevent checkbox clicks from triggering header
+        this.container.querySelector('.debug-controls').addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+    
+    toggleVisibility() {
+        this.container.classList.toggle('hidden');
+        this.globalToggle.textContent = this.container.classList.contains('hidden') ? 'Debug' : 'Hide Debug';
     }
     
     updateVisibility() {

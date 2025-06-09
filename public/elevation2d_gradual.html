@@ -126,9 +126,21 @@
 
       async loadInitialData() {
         try {
-          const response = await fetch('elevation_cache_reduced.json');
+          const bounds = {
+            south: 34.9,
+            west: -106.9,
+            north: 35.2,
+            east: -106.3
+          };
+
+          const response = await fetch(`/api/elevation-data?bounds=${bounds.south},${bounds.west},${bounds.north},${bounds.east}`);
           const data = await response.json();
-          this.processData(data);
+          const points = data.points.map(p => ({
+            lat: p.latitude,
+            lon: p.longitude,
+            elev: p.elevation
+          }));
+          this.processData(points);
           this.updateStats();
           this.draw();
         } catch (error) {
@@ -144,11 +156,23 @@
           document.getElementById('start-loading').disabled = true;
           document.getElementById('pause-loading').disabled = false;
 
-          const response = await fetch('elevation_cache.json');
-          this.fullDataset = await response.json();
+          const bounds = {
+            south: 34.9,
+            west: -106.9,
+            north: 35.2,
+            east: -106.3
+          };
+
+          const response = await fetch(`/api/elevation-data?bounds=${bounds.south},${bounds.west},${bounds.north},${bounds.east}`);
+          const data = await response.json();
+          this.fullDataset = data.points.map(p => ({
+            lat: p.latitude,
+            lon: p.longitude,
+            elev: p.elevation
+          }));
           
           // Calculate total chunks
-          const entries = Object.entries(this.fullDataset);
+          const entries = this.fullDataset;
           this.totalChunks = Math.ceil(entries.length / this.chunkSize);
           
           // Process chunks
@@ -159,7 +183,7 @@
             
             // Process chunk with density filter
             const filteredChunk = this.filterByDensity(chunk);
-            this.processData(Object.fromEntries(filteredChunk));
+            this.processData(filteredChunk);
             
             this.currentChunk++;
             this.updateProgress();

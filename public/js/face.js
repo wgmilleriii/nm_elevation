@@ -948,7 +948,7 @@ class ElevationViewer {
         if (!this.map) {
             mapLogger.log('Initializing map');
             try {
-                this.map = L.map('map');
+                this.map = L.map('map-frame');
 
                 mapLogger.log('Map initialized');
 
@@ -958,13 +958,13 @@ class ElevationViewer {
                     attribution: '© OpenStreetMap contributors'
                 }).addTo(this.map);
 
-                // Set initial view to specified location
-                const targetLat = 35.11791663567986;
-                const targetLon = -106.54626426361224;
-                const zoomLevel = 14; // Higher zoom level for ~10 mile radius
-                this.map.setView([targetLat, targetLon], zoomLevel);
+                // Set initial view to show all of New Mexico
+                const nmCenterLat = (NM_BOUNDS.north + NM_BOUNDS.south) / 2;
+                const nmCenterLon = (NM_BOUNDS.east + NM_BOUNDS.west) / 2;
+                const zoomLevel = 7; // Zoom level to show all of NM
+                this.map.setView([nmCenterLat, nmCenterLon], zoomLevel);
 
-                mapLogger.log('Set initial view', { lat: targetLat, lon: targetLon, zoom: zoomLevel });
+                mapLogger.log('Set initial view', { lat: nmCenterLat, lon: nmCenterLon, zoom: zoomLevel });
 
                 // Add New Mexico boundary rectangle
                 L.rectangle([

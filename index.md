@@ -1,3 +1,15 @@
+
+
+
+TODO: when map is moved, clear the SVG, and then add text elements that are the stats of the map window
+
+when the map movies, the SVG should
+- clear all the circles
+- create a grid of 100x100 circles , all light grey initially , and containing placholder info of what the GPS info is , laid out as if it were on a map
+- look at the elevation data for the selected window 
+- change the color on all of the circles to the closest datapoint entry
+
+
 # New Mexico Elevation Data Collection System
 
 ## Core Features

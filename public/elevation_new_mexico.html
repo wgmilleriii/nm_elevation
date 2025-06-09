@@ -320,14 +320,22 @@
             }
         }
 
-        // Load and process data
-        fetch('elevation_cache_reduced.json')
+        // Get elevation data from API
+        const bounds = {
+            south: 31.20,
+            west: -109.20,
+            north: 37.20,
+            east: -102.80
+        };
+
+        fetch(`/api/elevation-data?bounds=${bounds.south},${bounds.west},${bounds.north},${bounds.east}`)
             .then(res => res.json())
             .then(data => {
-                const points = Object.entries(data).map(([key, elev]) => {
-                    const [lat, lon] = key.split(',').map(Number);
-                    return { lat, lon, elev };
-                });
+                const points = data.points.map(p => ({
+                    lat: p.latitude,
+                    lon: p.longitude,
+                    elev: p.elevation
+                }));
 
                 if (points.length === 0) return;
 

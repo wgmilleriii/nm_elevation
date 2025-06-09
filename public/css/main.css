@@ -87,4 +87,27 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
+}
+
+.point-count-display {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    font-weight: 500;
+    line-height: 1.5;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+
+.point-count-display:hover {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.point-tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 1000;
+    white-space: nowrap;
 } 

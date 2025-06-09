@@ -173,8 +173,19 @@
 
     async function loadElevationData() {
         try {
-            const response = await fetch('elevation_cache_reduced.json');
-            elevationData = await response.json();
+            const bounds = {
+                south: 34.9,
+                west: -106.9,
+                north: 35.2,
+                east: -106.3
+            };
+
+            const response = await fetch(`/api/elevation-data?bounds=${bounds.south},${bounds.west},${bounds.north},${bounds.east}`);
+            const data = await response.json();
+            elevationData = {};
+            data.points.forEach(p => {
+                elevationData[`${p.latitude},${p.longitude}`] = p.elevation;
+            });
             processData();
             draw();
         } catch (e) {
