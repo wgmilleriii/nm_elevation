@@ -14,14 +14,15 @@ check_if_pi() {
 
 # Function to restart the collect sparse points service
 restart_service() {
-    echo "Restarting collect_sparse_points service..."
-    # First try systemctl if it exists
-    if command -v systemctl >/dev/null 2>&1; then
-        sudo systemctl restart collect_sparse_points.service
+    echo "Restarting nm-elevation service..."
+    sudo systemctl restart nm-elevation.service
+    
+    # Check if service restarted successfully
+    if sudo systemctl is-active nm-elevation.service > /dev/null; then
+        echo "Service restarted successfully"
     else
-        # Fallback to manual process management
-        pkill -f "node collect_sparse_points.js"
-        nohup node collect_sparse_points.js > collect_sparse_points.log 2>&1 &
+        echo "Warning: Service may not have restarted properly"
+        sudo systemctl status nm-elevation.service
     fi
 }
 
