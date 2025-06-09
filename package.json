@@ -1,15 +1,28 @@
 {
-  "name": "nm-elevation",
+  "name": "nm_elevation",
   "version": "1.0.0",
+  "description": "New Mexico elevation data collection and visualization",
   "type": "module",
-  "description": "New Mexico elevation data collection system",
-  "main": "collect_sparse_points.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node collect_sparse_points.js",
-    "clean-locks": "node -e \"import('./db_manager.js').then(({cleanupStaleLocks}) => cleanupStaleLocks())\""
+    "start": "node server.js",
+    "test": "node scripts/test_apis.js"
   },
+  "keywords": [
+    "elevation",
+    "new-mexico",
+    "visualization"
+  ],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "better-sqlite3": "^9.4.0",
+    "better-sqlite3": "^8.7.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "chalk": "^5.3.0",
     "node-fetch": "^3.3.2"
   }
 }

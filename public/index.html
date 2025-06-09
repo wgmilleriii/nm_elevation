@@ -10,11 +10,12 @@
     
     <!-- Our CSS -->
     <link rel="stylesheet" href="css/main.css" />
+    <link rel="stylesheet" href="css/debug.css" />
     
     <!-- Load scripts in correct order with defer -->
     <script defer src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
     <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script defer src="js/main.js"></script>
+    <script type="module" src="js/main.js"></script>
     
     <style>
         body {
@@ -95,6 +96,24 @@
             flex-direction: column;
             gap: 10px;
         }
+        .stats-container {
+            background: #f8f8f8;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 16px;
+        }
+        
+        .stats-container p {
+            margin: 0;
+            color: #333;
+        }
+        
+        #total-points {
+            font-weight: bold;
+            color: #4CAF50;
+        }
     </style>
 </head>
 <body>
@@ -113,142 +132,9 @@
             <canvas id="selection-canvas"></canvas>
             <svg preserveAspectRatio="xMidYMid meet"></svg>
         </div>
-        <div id="stats"></div>
+        <div id="stats" class="stats-container">
+            <p>Total elevation points in database: <span id="total-points">Loading...</span></p>
+        </div>
     </div>
-    
-    <script>
-        let map = null;
-        let currentResolution = 'high';
-
-        // Initialize map and visualization when everything is loaded
-        window.addEventListener('load', () => {
-            if (!window.L) {
-                console.error('Leaflet not loaded properly');
-                return;
-            }
-            
-            // Initialize map only if not already initialized
-            if (!map) {
-                map = L.map('map').setView([34.5, -106], 7); // Center of NM
-                
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(map);
-            }
-
-            // Add locate me button functionality
-            document.getElementById('locate-me').addEventListener('click', () => {
-                if ("geolocation" in navigator) {
-                    navigator.geolocation.getCurrentPosition((position) => {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        
-                        // Check if location is within New Mexico bounds
-                        if (lat >= 31.33 && lat <= 37.00 && lon >= -109.05 && lon <= -103.00) {
-                            map.setView([lat, lon], 12); // Zoom level 12 for local view
-                            
-                            // Add a marker for current location
-                            L.marker([lat, lon])
-                                .addTo(map)
-                                .bindPopup('You are here!')
-                                .openPopup();
-                        } else {
-                            alert('Your location is outside New Mexico. Showing the full state.');
-                            map.setView([34.5, -106], 7);
-                        }
-                    }, (error) => {
-                        console.error('Error getting location:', error);
-                        alert('Could not get your location. Please check your browser settings.');
-                    });
-                } else {
-                    alert('Geolocation is not supported by your browser');
-                }
-            });
-
-            // Initialize canvas
-            const canvas = document.getElementById('selection-canvas');
-            if (canvas) {
-                const container = document.getElementById('visualization');
-                canvas.width = container.clientWidth;
-                canvas.height = container.clientHeight;
-            }
-            
-            // Initialize visualization
-            visualizeData();
-        });
-
-        async function fetchData() {
-            const response = await fetch(`/api/elevation-data${currentResolution === 'high' ? '?resolution=high' : ''}`);
-            return response.json();
-        }
-
-        function getElevationColor(elevation, minElevation, maxElevation) {
-            if (elevation === null) {
-                return 'rgba(255, 255, 255, 0.5)';
-            }
-            const normalizedElevation = (elevation - minElevation) / (maxElevation - minElevation);
-            const r = Math.round(normalizedElevation * 255);
-            const g = Math.round(normalizedElevation * 255);
-            const b = Math.round(255 * (1 - normalizedElevation));
-            return `rgb(${r},${g},${b})`;
-        }
-
-        async function toggleResolution() {
-            const button = document.getElementById('resolution-toggle');
-            currentResolution = currentResolution === 'low' ? 'high' : 'low';
-            button.textContent = `Switch to ${currentResolution === 'low' ? 'High' : 'Low'} Resolution`;
-            await visualizeData();
-        }
-
-        async function visualizeData() {
-            const { points, stats } = await fetchData();
-            const container = document.getElementById('visualization');
-            const svg = container.querySelector('svg');
-            
-            // Clear existing points
-            svg.innerHTML = '';
-            
-            // Calculate dimensions
-            const width = container.clientWidth;
-            const height = container.clientHeight;
-            const padding = 20;
-            
-            // Set SVG dimensions
-            svg.setAttribute('width', width);
-            svg.setAttribute('height', height);
-            
-            // Find bounds
-            const minLat = 31.33;
-            const maxLat = 37.00;
-            const minLon = -109.05;
-            const maxLon = -103.00;
-            
-            // Create points
-            points.forEach(point => {
-                const x = ((point.longitude - minLon) / (maxLon - minLon)) * (width - 2 * padding) + padding;
-                const y = height - (((point.latitude - minLat) / (maxLat - minLat)) * (height - 2 * padding) + padding);
-                
-                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                circle.setAttribute('cx', x);
-                circle.setAttribute('cy', y);
-                circle.setAttribute('r', 2);
-                circle.setAttribute('fill', getElevationColor(point.elevation, stats.min_elevation, stats.max_elevation));
-                circle.setAttribute('class', 'point');
-                
-                // Add tooltip
-                circle.setAttribute('title', `Lat: ${point.latitude.toFixed(4)}, Lon: ${point.longitude.toFixed(4)}\nElevation: ${point.elevation.toFixed(1)}m`);
-                
-                svg.appendChild(circle);
-            });
-            
-            // Update stats
-            document.getElementById('stats').innerHTML = `
-                Points: ${stats.point_count.toLocaleString()}<br>
-                Elevation Range: ${stats.min_elevation.toFixed(1)}m to ${stats.max_elevation.toFixed(1)}m<br>
-                Resolution: ${stats.resolution}
-            `;
-        }
-    </script>
 </body>
 </html> 

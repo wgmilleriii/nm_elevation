@@ -1,9 +1,11 @@
 import express from 'express';
+import cors from 'cors';
+import Database from 'better-sqlite3';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import Database from 'better-sqlite3';
-import { fileURLToPath } from 'url';
+import sqlite3 from 'sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,17 +78,21 @@ function getDb(gridKey) {
     console.log('Opening database at:', dbPath);
     
     try {
-        const db = new Database(dbPath);
+        const db = new Database(dbPath, { fileMustExist: false });
         
         // Initialize if needed
         db.exec(`
             CREATE TABLE IF NOT EXISTS elevation_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 latitude REAL NOT NULL,
                 longitude REAL NOT NULL,
-                elevation REAL NOT NULL,
-                PRIMARY KEY (latitude, longitude)
+                elevation REAL,
+                source TEXT,
+                collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(latitude, longitude)
             );
-            CREATE INDEX IF NOT EXISTS idx_lat_lon ON elevation_points(latitude, longitude);
+            CREATE INDEX IF NOT EXISTS idx_points_location ON elevation_points(latitude, longitude);
+            CREATE INDEX IF NOT EXISTS idx_points_elevation ON elevation_points(elevation);
         `);
 
         // Store in connection pool
@@ -388,77 +394,101 @@ app.get('/api/santa-fe-elevation', async (req, res) => {
             throw new Error('Invalid parameters');
         }
         
-        const db = await getDb(centerLat.toFixed(4) + '_' + centerLon.toFixed(4) + '_' + (centerLat + radiusKm * 2).toFixed(4) + '_' + (centerLon + radiusKm * 2).toFixed(4));
+        // Generate database name from bounds
+        const dbName = `${centerLat.toFixed(4)}_${centerLon.toFixed(4)}_${(centerLat + radiusKm * 2).toFixed(4)}_${(centerLon + radiusKm * 2).toFixed(4)}.db`;
+        const dbPath = path.join(__dirname, 'grid_databases', dbName);
         
-        // Get points within a larger radius to show available data
-        const searchRadius = radiusKm * 2; // Double the search radius
-        const latRange = searchRadius / 111;
-        const lonRange = searchRadius / (111 * Math.cos(centerLat * Math.PI / 180));
+        // Create database if it doesn't exist
+        const db = new Database(dbPath, { fileMustExist: false });
         
-        // First, get the count of points in the area
-        const countResult = await db.get(`
-            SELECT COUNT(*) as count
-            FROM elevation_points
-            WHERE latitude BETWEEN ? AND ?
-            AND longitude BETWEEN ? AND ?
-        `, [
-            centerLat - latRange,
-            centerLat + latRange,
-            centerLon - lonRange,
-            centerLon + lonRange
-        ]);
-
-        if (countResult.count === 0) {
-            // If no points in doubled radius, get nearest 1000 points
-            const points = await db.all(`
-                SELECT latitude, longitude, elevation,
-                       ((latitude - ?) * (latitude - ?) + 
-                        (longitude - ?) * (longitude - ?)) as distance
-                FROM elevation_points
-                ORDER BY distance ASC
-                LIMIT 1000
-            `, [centerLat, centerLat, centerLon, centerLon]);
-
-            const elevations = points.map(p => p.elevation);
-            const stats = {
-                min_elevation: Math.min(...elevations),
-                max_elevation: Math.max(...elevations),
-                point_count: points.length,
-                avg_elevation: elevations.reduce((a, b) => a + b) / elevations.length,
-                area_km2: Math.PI * radiusKm * radiusKm,
-                note: "Showing nearest available points as requested area has no data yet"
-            };
+        try {
+            // Create tables if they don't exist
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS elevation_points (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    elevation REAL,
+                    source TEXT,
+                    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(latitude, longitude)
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_points_location ON elevation_points(latitude, longitude);
+                CREATE INDEX IF NOT EXISTS idx_points_elevation ON elevation_points(elevation);
+            `);
             
-            res.json({ points, stats });
-        } else {
-            // Get points within the larger radius
-            const points = await db.all(`
-                SELECT latitude, longitude, elevation
+            // Get points within a larger radius to show available data
+            const searchRadius = radiusKm * 2; // Double the search radius
+            const latRange = searchRadius / 111;
+            const lonRange = searchRadius / (111 * Math.cos(centerLat * Math.PI / 180));
+            
+            // First, get the count of points in the area
+            const countResult = db.prepare(`
+                SELECT COUNT(*) as count
                 FROM elevation_points
                 WHERE latitude BETWEEN ? AND ?
                 AND longitude BETWEEN ? AND ?
-            `, [
+            `).get(
                 centerLat - latRange,
                 centerLat + latRange,
                 centerLon - lonRange,
                 centerLon + lonRange
-            ]);
-            
-            // Calculate statistics
-            const elevations = points.map(p => p.elevation);
-            const stats = {
-                min_elevation: Math.min(...elevations),
-                max_elevation: Math.max(...elevations),
-                point_count: points.length,
-                avg_elevation: elevations.reduce((a, b) => a + b) / elevations.length,
-                area_km2: Math.PI * searchRadius * searchRadius,
-                note: "Showing data from a larger area due to sparse coverage"
-            };
+            );
+
+            let points, stats;
+
+            if (countResult.count === 0) {
+                // If no points in doubled radius, get nearest 1000 points
+                points = db.prepare(`
+                    SELECT latitude, longitude, elevation,
+                           ((latitude - ?) * (latitude - ?) + 
+                            (longitude - ?) * (longitude - ?)) as distance
+                    FROM elevation_points
+                    ORDER BY distance ASC
+                    LIMIT 1000
+                `).all(centerLat, centerLat, centerLon, centerLon);
+
+                const elevations = points.map(p => p.elevation).filter(e => e !== null);
+                stats = {
+                    min_elevation: elevations.length > 0 ? Math.min(...elevations) : null,
+                    max_elevation: elevations.length > 0 ? Math.max(...elevations) : null,
+                    point_count: points.length,
+                    avg_elevation: elevations.length > 0 ? elevations.reduce((a, b) => a + b) / elevations.length : null,
+                    area_km2: Math.PI * radiusKm * radiusKm,
+                    note: "Showing nearest available points as requested area has no data yet"
+                };
+            } else {
+                // Get points within the larger radius
+                points = db.prepare(`
+                    SELECT latitude, longitude, elevation
+                    FROM elevation_points
+                    WHERE latitude BETWEEN ? AND ?
+                    AND longitude BETWEEN ? AND ?
+                `).all(
+                    centerLat - latRange,
+                    centerLat + latRange,
+                    centerLon - lonRange,
+                    centerLon + lonRange
+                );
+                
+                // Calculate statistics
+                const elevations = points.map(p => p.elevation).filter(e => e !== null);
+                stats = {
+                    min_elevation: elevations.length > 0 ? Math.min(...elevations) : null,
+                    max_elevation: elevations.length > 0 ? Math.max(...elevations) : null,
+                    point_count: points.length,
+                    avg_elevation: elevations.length > 0 ? elevations.reduce((a, b) => a + b) / elevations.length : null,
+                    area_km2: Math.PI * searchRadius * searchRadius,
+                    note: "Showing data from a larger area due to sparse coverage"
+                };
+            }
             
             res.json({ points, stats });
+            
+        } finally {
+            db.close();
         }
-        
-        await db.close();
     } catch (error) {
         console.error('Error fetching Santa Fe elevation data:', error);
         res.status(500).json({ error: error.message || 'Failed to fetch elevation data' });
@@ -508,152 +538,97 @@ app.post('/api/enhance-region', async (req, res) => {
             });
         }
 
-        // Pre-populate grid points with NULL elevations
-        const db = await getDb(bounds.minLat.toFixed(4) + '_' + bounds.minLon.toFixed(4) + '_' + bounds.maxLat.toFixed(4) + '_' + bounds.maxLon.toFixed(4));
-        await db.run('BEGIN TRANSACTION');
+        // Generate database name from bounds
+        const dbName = `${bounds.minLat.toFixed(4)}_${bounds.minLon.toFixed(4)}_${bounds.maxLat.toFixed(4)}_${bounds.maxLon.toFixed(4)}.db`;
+        const dbPath = path.join(__dirname, 'grid_databases', dbName);
 
+        // Create database if it doesn't exist
+        const db = new Database(dbPath, { fileMustExist: false });
+        
         try {
+            // Create tables if they don't exist - simplified schema without source column
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS elevation_points (
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    elevation REAL,
+                    PRIMARY KEY (latitude, longitude)
+                );
+                CREATE INDEX IF NOT EXISTS idx_lat_lon ON elevation_points(latitude, longitude);
+            `);
+
             // Calculate grid size for approximately 10,000 points
             const gridSize = Math.ceil(Math.sqrt(10000));
             const latStep = (bounds.maxLat - bounds.minLat) / (gridSize - 1);
             const lonStep = (bounds.maxLon - bounds.minLon) / (gridSize - 1);
 
-            console.log('Enhancement region bounds:', bounds);
-            console.log(`Creating grid: ${gridSize}x${gridSize} (${gridSize * gridSize} points total)`);
-            console.log(`Grid steps: lat=${latStep.toFixed(6)}, lon=${lonStep.toFixed(6)}`);
+            // Begin transaction
+            db.exec('BEGIN TRANSACTION');
 
-            // First, ensure we have the correct table structure
-            await db.exec(`
-                CREATE TABLE IF NOT EXISTS elevation_points (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    latitude REAL NOT NULL,
-                    longitude REAL NOT NULL,
-                    elevation REAL,
-                    source TEXT,
-                    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(latitude, longitude)
-                );
-                
-                CREATE INDEX IF NOT EXISTS idx_points_location ON elevation_points(latitude, longitude);
-                CREATE INDEX IF NOT EXISTS idx_points_elevation ON elevation_points(elevation);
-            `);
+            try {
+                // Clear any existing points in the region that have NULL elevation
+                const deleteStmt = db.prepare(`
+                    DELETE FROM elevation_points 
+                    WHERE latitude BETWEEN ? AND ? 
+                    AND longitude BETWEEN ? AND ?
+                    AND elevation IS NULL
+                `);
+                deleteStmt.run(bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon);
 
-            // Clear any existing points in the region that have NULL elevation
-            await db.run(`
-                DELETE FROM elevation_points 
-                WHERE latitude BETWEEN ? AND ? 
-                AND longitude BETWEEN ? AND ?
-                AND elevation IS NULL
-            `, [bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon]);
+                // Prepare the insert statement - simplified to match our schema
+                const insertStmt = db.prepare(`
+                    INSERT OR IGNORE INTO elevation_points (latitude, longitude, elevation)
+                    VALUES (?, ?, ?)
+                `);
 
-            console.log('Cleared existing NULL elevation points in region');
+                let insertedPoints = 0;
 
-            // Prepare the insert statement
-            const stmt = await db.prepare(`
-                INSERT OR IGNORE INTO elevation_points (latitude, longitude, elevation, source)
-                VALUES (?, ?, NULL, 'pending')
-            `);
-
-            // Generate and insert grid points
-            let insertedPoints = 0;
-            let batchSize = 1000;
-            let pointsToInsert = [];
-
-            for (let i = 0; i < gridSize; i++) {
-                for (let j = 0; j < gridSize; j++) {
-                    const lat = bounds.maxLat - (i * latStep);
-                    const lon = bounds.minLon + (j * lonStep);
-                    
-                    pointsToInsert.push([lat, lon]);
-                    
-                    if (pointsToInsert.length >= batchSize) {
-                        for (const point of pointsToInsert) {
-                            await stmt.run(point[0], point[1]);
-                        }
-                        insertedPoints += pointsToInsert.length;
-                        console.log(`Inserted ${insertedPoints} points so far...`);
-                        pointsToInsert = [];
+                // Generate and insert grid points
+                for (let i = 0; i < gridSize; i++) {
+                    for (let j = 0; j < gridSize; j++) {
+                        const lat = bounds.minLat + (i * latStep);
+                        const lon = bounds.minLon + (j * lonStep);
+                        insertStmt.run(lat, lon, null);
+                        insertedPoints++;
                     }
                 }
+
+                // Commit transaction
+                db.exec('COMMIT');
+
+                // Verify points were created
+                const verification = db.prepare(`
+                    SELECT COUNT(*) as count
+                    FROM elevation_points
+                    WHERE latitude BETWEEN ? AND ?
+                    AND longitude BETWEEN ? AND ?
+                    AND elevation IS NULL
+                `).get(bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon);
+
+                console.log(`Grid point creation complete:
+                    Attempted to insert: ${insertedPoints} points
+                    Actually created: ${verification.count} points
+                    Region bounds: ${bounds.minLat.toFixed(4)}°N to ${bounds.maxLat.toFixed(4)}°N, 
+                                  ${bounds.minLon.toFixed(4)}°W to ${bounds.maxLon.toFixed(4)}°W
+                `);
+
+                res.json({ 
+                    status: 'started', 
+                    bounds,
+                    message: 'Enhancement process started successfully',
+                    points_created: verification.count
+                });
+
+            } catch (error) {
+                console.error('Error in database operations:', error);
+                db.exec('ROLLBACK');
+                throw error;
             }
 
-            // Insert any remaining points
-            if (pointsToInsert.length > 0) {
-                for (const point of pointsToInsert) {
-                    await stmt.run(point[0], point[1]);
-                }
-                insertedPoints += pointsToInsert.length;
-            }
-
-            await stmt.finalize();
-            await db.run('COMMIT');
-            
-            // Verify the points were created
-            const verification = await db.get(`
-                SELECT COUNT(*) as count
-                FROM elevation_points
-                WHERE latitude BETWEEN ? AND ?
-                AND longitude BETWEEN ? AND ?
-                AND elevation IS NULL
-            `, [bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon]);
-            
-            console.log(`Grid point creation complete:
-                Attempted to insert: ${insertedPoints} points
-                Actually created: ${verification.count} points
-                Region bounds: ${bounds.minLat.toFixed(4)}°N to ${bounds.maxLat.toFixed(4)}°N, 
-                              ${bounds.minLon.toFixed(4)}°W to ${bounds.maxLon.toFixed(4)}°W
-            `);
-
-            if (verification.count < insertedPoints * 0.9) {
-                console.warn('Warning: Significant number of points were not created!');
-            }
-
-        } catch (error) {
-            console.error('Error pre-populating grid points:', error);
-            await db.run('ROLLBACK');
-            throw error;
         } finally {
-            await db.close();
+            db.close();
         }
-        
-        // Save bounds to a file for the collection script
-        const boundsFile = path.join(__dirname, 'enhance_bounds.json');
-        fs.writeFileSync(boundsFile, JSON.stringify(bounds, null, 2));
-        console.log('Wrote bounds to:', boundsFile);
-        
-        // Start the collection process
-        const collectScript = path.join(__dirname, 'collect_sparse_points.js');
-        console.log('Starting collection script:', collectScript);
-        
-        const child = spawn('node', [collectScript, '--enhance'], {
-            detached: true,
-            stdio: 'pipe'
-        });
-        
-        child.stdout.on('data', (data) => {
-            console.log('Collection process output:', data.toString());
-        });
-        
-        child.stderr.on('data', (data) => {
-            console.error('Collection process error:', data.toString());
-        });
-        
-        child.on('error', (error) => {
-            console.error('Failed to start collection process:', error);
-            return res.status(500).json({ 
-                error: 'Failed to start collection process',
-                details: error.message
-            });
-        });
-        
-        child.unref();
-        
-        console.log('Enhancement process started successfully');
-        res.json({ 
-            status: 'started', 
-            bounds,
-            message: 'Enhancement process started successfully'
-        });
+
     } catch (error) {
         console.error('Error in enhance-region endpoint:', error);
         res.status(500).json({ 
@@ -891,6 +866,22 @@ app.post('/api/queue', express.json(), (req, res) => {
     } catch (error) {
         console.error('Error writing to queue:', error);
         res.status(500).json({ error: 'Failed to write to queue' });
+    }
+});
+
+app.get('/api/stats', async (req, res) => {
+    try {
+        const db = new Database('mother.db', { fileMustExist: true });
+        
+        try {
+            const row = db.prepare('SELECT COUNT(*) as total FROM elevation_points').get();
+            res.json({ total: row.total });
+        } finally {
+            db.close();
+        }
+    } catch (error) {
+        console.error('Error in /api/stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

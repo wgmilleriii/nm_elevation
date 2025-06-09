@@ -39,6 +39,7 @@ test_cache.js
 cache.js
 # summary.log is now tracked
 # summary.log
+mother.db
 
 # Large data files
 *.tif
