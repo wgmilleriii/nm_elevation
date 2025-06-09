@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>New Mexico Elevation Map Generator</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        select, button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .map-container {
+            height: 500px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        .map-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .history {
+            margin-top: 20px;
+        }
+        .history-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .history-item {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .history-item img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .history-info {
+            padding: 10px;
+        }
+        .history-date {
+            color: #666;
+            margin: 0;
+            font-size: 0.9em;
+        }
+        .history-type {
+            margin: 5px 0 0;
+            font-weight: bold;
+        }
+        .selection-box {
+            border: 2px solid #4CAF50;
+            background-color: rgba(76, 175, 80, 0.1);
+            position: absolute;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>New Mexico Elevation Map Generator</h1>
+        
+        <!-- GPS Coordinates Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Generate Custom Map</h5>
+            </div>
+            <div class="card-body">
+                <form id="gpsForm" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="north" class="form-label">North Latitude</label>
+                        <input type="number" step="0.000001" class="form-control" id="north" value="35.3">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="south" class="form-label">South Latitude</label>
+                        <input type="number" step="0.000001" class="form-control" id="south" value="35.0">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="east" class="form-label">East Longitude</label>
+                        <input type="number" step="0.000001" class="form-control" id="east" value="-106.4">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="west" class="form-label">West Longitude</label>
+                        <input type="number" step="0.000001" class="form-control" id="west" value="-106.7">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Generate Map</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Map Display -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Color Map</h5>
+                    </div>
+                    <div class="card-body">
+                        <img id="colorMap" src="" class="img-fluid" alt="Color Contour Map">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Black & White Map</h5>
+                    </div>
+                    <div class="card-body">
+                        <img id="bwMap" src="" class="img-fluid" alt="B&W Contour Map">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container history">
+        <h2>History</h2>
+        <div class="history-grid">
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_bw_20250608_142907.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">BW</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_bw_20250608_143406.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">BW</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_bw_20250608_145148.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">BW</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_bw_20250608_151713.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">BW</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_bw_20250608_153143.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">BW</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_bw_20250608_153154.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">BW</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_bw_20250608_153413.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">BW</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_bw_20250608_153421.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">BW</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_bw_20250608_153425.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">BW</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_bw_20250608_153432.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">BW</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_color_20250608_151726.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">COLOR</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_color_20250608_153121.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">COLOR</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_color_20250608_153129.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">COLOR</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_color_20250608_153154.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">COLOR</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_color_20250608_153305.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">COLOR</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_color_20250608_153312.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">COLOR</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_color_20250608_153338.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">COLOR</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_color_20250608_153350.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">COLOR</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_color_20250608_153355.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">COLOR</p>
+                </div>
+            </div>
+            
+            <div class="history-item">
+                <img src="/static/images/contour_map_color_20250608_153405.png" alt="Contour Map">
+                <div class="history-info">
+                    <p class="history-date">Unknown</p>
+                    <p class="history-type">COLOR</p>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([34.5, -106], 7);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // New Mexico bounds
+        const nmBounds = {
+            minLat: 31.20,
+            maxLat: 37.20,
+            minLon: -109.20,
+            maxLon: -102.80
+        };
+
+        // Draw New Mexico border
+        const nmBorder = L.rectangle([
+            [nmBounds.minLat, nmBounds.minLon],
+            [nmBounds.maxLat, nmBounds.maxLon]
+        ], {
+            color: "#ff7800",
+            weight: 2,
+            fillOpacity: 0
+        }).addTo(map);
+
+        // Selection box variables
+        let selectionBox = null;
+        let startPoint = null;
+        let isDrawing = false;
+
+        // Mouse events for selection box
+        map.on('mousedown', function(e) {
+            if (e.originalEvent.button === 0) { // Left click only
+                isDrawing = true;
+                startPoint = e.latlng;
+                
+                if (selectionBox) {
+                    map.removeLayer(selectionBox);
+                }
+                
+                selectionBox = L.rectangle([
+                    startPoint,
+                    startPoint
+                ], {
+                    color: "#4CAF50",
+                    weight: 2,
+                    fillOpacity: 0.1
+                }).addTo(map);
+            }
+        });
+
+        map.on('mousemove', function(e) {
+            if (isDrawing && startPoint) {
+                const bounds = [
+                    [Math.min(startPoint.lat, e.latlng.lat), Math.min(startPoint.lng, e.latlng.lng)],
+                    [Math.max(startPoint.lat, e.latlng.lat), Math.max(startPoint.lng, e.latlng.lng)]
+                ];
+                selectionBox.setBounds(bounds);
+            }
+        });
+
+        map.on('mouseup', function(e) {
+            if (isDrawing) {
+                isDrawing = false;
+                const bounds = selectionBox.getBounds();
+                
+                // Check if selection is too small (less than 0.1 degrees in either direction)
+                const latDiff = Math.abs(bounds.getNorth() - bounds.getSouth());
+                const lonDiff = Math.abs(bounds.getEast() - bounds.getWest());
+                
+                if (latDiff < 0.1 || lonDiff < 0.1) {
+                    alert('Please select a larger area by clicking and dragging');
+                    map.removeLayer(selectionBox);
+                    selectionBox = null;
+                    document.getElementById('generateBtn').disabled = true;
+                    return;
+                }
+                
+                // Check if selection is within New Mexico
+                if (bounds.getNorth() > nmBounds.maxLat || bounds.getSouth() < nmBounds.minLat ||
+                    bounds.getEast() > nmBounds.maxLon || bounds.getWest() < nmBounds.minLon) {
+                    alert('Selection must be within New Mexico borders');
+                    map.removeLayer(selectionBox);
+                    selectionBox = null;
+                    document.getElementById('generateBtn').disabled = true;
+                } else {
+                    document.getElementById('generateBtn').disabled = false;
+                }
+            }
+        });
+
+        // Generate button click handler
+        document.getElementById('generateBtn').addEventListener('click', function() {
+            console.log('Generate button clicked');
+            if (selectionBox) {
+                const bounds = selectionBox.getBounds();
+                const colorMode = document.getElementById('colorMode').value;
+                
+                console.log('Selection bounds:', {
+                    north: bounds.getNorth(),
+                    south: bounds.getSouth(),
+                    east: bounds.getEast(),
+                    west: bounds.getWest()
+                });
+                console.log('Color mode:', colorMode);
+                
+                const url = `/generate_map_bounds?color_mode=${colorMode}&north=${bounds.getNorth()}&south=${bounds.getSouth()}&east=${bounds.getEast()}&west=${bounds.getWest()}`;
+                console.log('Sending request to:', url);
+                
+                // Send request to generate map
+                fetch(url)
+                    .then(response => {
+                        console.log('Response status:', response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Response data:', data);
+                        if (data.success) {
+                            console.log('Map generated successfully, reloading page...');
+                            window.location.reload();
+                        } else {
+                            console.error('Error in response:', data.error);
+                            alert('Error generating map: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Fetch error:', error);
+                        alert('Error generating map: ' + error);
+                    });
+            } else {
+                console.log('No selection box found');
+            }
+        });
+
+        document.getElementById('gpsForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const params = new URLSearchParams({
+                north: document.getElementById('north').value,
+                south: document.getElementById('south').value,
+                east: document.getElementById('east').value,
+                west: document.getElementById('west').value
+            });
+            
+            try {
+                const response = await fetch(`/generate_map?${params}`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Update map images
+                    const timestamp = data.timestamp;
+                    document.getElementById('colorMap').src = `/static/public/images/contour_map_color_${timestamp}.png`;
+                    document.getElementById('bwMap').src = `/static/public/images/contour_map_bw_${timestamp}.png`;
+                } else {
+                    alert('Error generating map: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html> 

@@ -108,9 +108,9 @@ const APIS = [
 
 // Grid configuration
 const GRID_LEVELS = [
-    { size: 10, points: 100 },    // Level 1: 10x10 grid = 100 points
-    { size: 10, points: 1000 },   // Level 2: Each L1 cell -> 10 points = 1,000 total
-    { size: 10, points: 10000 }   // Level 3: Each L2 cell -> 10 points = 10,000 total
+    { size: 20, points: 400 },    // Level 1: 20x20 grid = 400 points
+    { size: 20, points: 4000 },   // Level 2: Each L1 cell -> 10 points = 4,000 total
+    { size: 20, points: 40000 }   // Level 3: Each L2 cell -> 10 points = 40,000 total
 ];
 
 // Add rate limit handling configuration
@@ -415,13 +415,13 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
     }
 
     const gridConfig = GRID_LEVELS[level];
-    const levelMsg = `Processing grid level ${level + 1} (${level === 0 ? '10x10' : '10 points per cell'} grid) - Direction: ${collectionDirection}`;
+    const levelMsg = `Processing grid level ${level + 1} (${level === 0 ? '20x20' : '10 points per cell'} grid) - Direction: ${collectionDirection}`;
     logProgress(levelMsg);
     
     try {
         const bounds = level === 0 ? parentBounds : calculateSubgridBounds(
             parentBounds, 
-            10,
+            20,
             parentI, 
             parentJ
         );
@@ -504,12 +504,12 @@ async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS
         // Process next level with the same direction pattern
         if (level < GRID_LEVELS.length - 1) {
             const iRange = collectionDirection === COLLECTION_DIRECTIONS.NORTHEAST_TO_SOUTHWEST
-                ? Array.from({length: 10}, (_, i) => 9 - i)
-                : Array.from({length: 10}, (_, i) => i);
+                ? Array.from({length: 20}, (_, i) => 19 - i)
+                : Array.from({length: 20}, (_, i) => i);
             
             const jRange = collectionDirection === COLLECTION_DIRECTIONS.NORTHEAST_TO_SOUTHWEST
-                ? Array.from({length: 10}, (_, j) => 9 - j)
-                : Array.from({length: 10}, (_, j) => j);
+                ? Array.from({length: 20}, (_, j) => 19 - j)
+                : Array.from({length: 20}, (_, j) => j);
 
             for (const i of iRange) {
                 for (const j of jRange) {
@@ -597,7 +597,7 @@ const LOGS_DIR = path.join(__dirname, 'logs');
 
 // Update findMostIncompleteDatabase function
 async function findMostIncompleteDatabase() {
-    const gridSize = 10;
+    const gridSize = 20;
     let mostIncomplete = null;
     let lowestCompletion = 1.0; // 100%
 
@@ -624,7 +624,7 @@ async function findMostIncompleteDatabase() {
                 db.exec(DB_SCHEMA); // Ensure tables exist
                 const result = db.prepare('SELECT COUNT(*) as count FROM points').get();
                 const points = result.count;
-                const completion = points / 10000; // Target is 10K points
+                const completion = points / 40000; // Target is 40K points
                 db.close();
 
                 if (completion < lowestCompletion) {

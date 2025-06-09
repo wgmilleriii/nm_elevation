@@ -9,6 +9,7 @@ import glob
 from PIL import Image, ImageDraw, ImageFont
 import time
 from generate_elevation_image import create_elevation_image
+from scipy.interpolate import griddata
 
 # New Mexico bounds
 NM_BOUNDS = {
@@ -41,11 +42,10 @@ def get_elevation_data(bounds):
     db_files = glob.glob('grid_databases/mountains_*.db')
     print(f"\nFound {len(db_files)} database files")
     
-    # Test data to verify bounds
-    test_point = (35.108862226829714, -104.6985408614735, 1000)  # lat, lon, elevation
-    print(f"\nTest point: {test_point}")
-    print(f"Bounds check: lat {bounds['minLat']} <= {test_point[0]} <= {bounds['maxLat']}")
-    print(f"Bounds check: lon {bounds['minLon']} <= {test_point[1]} <= {bounds['maxLon']}")
+    # Print the bounds we're querying
+    print(f"\nQuery bounds:")
+    print(f"Latitude: {bounds['minLat']} to {bounds['maxLat']}")
+    print(f"Longitude: {bounds['minLon']} to {bounds['maxLon']}")
     
     for db_file in db_files:
         try:
@@ -74,7 +74,6 @@ def get_elevation_data(bounds):
             """
             params = [bounds['minLat'], bounds['maxLat'], 
                      bounds['minLon'], bounds['maxLon']]
-            print(f"Query bounds: lat={bounds['minLat']:.2f} to {bounds['maxLat']:.2f}, lon={bounds['minLon']:.2f} to {bounds['maxLon']:.2f}")
             
             # First check if there are any points in the database
             cursor.execute("SELECT COUNT(*) FROM elevation_points")
@@ -94,6 +93,11 @@ def get_elevation_data(bounds):
             
             if points:
                 print("Sample point from query:", points[0])
+                print("Point distribution:")
+                lats = [p[0] for p in points]
+                lons = [p[1] for p in points]
+                print(f"Latitude range: {min(lats):.4f} to {max(lats):.4f}")
+                print(f"Longitude range: {min(lons):.4f} to {max(lons):.4f}")
             
             all_points.extend(points)
             conn.close()
@@ -104,7 +108,12 @@ def get_elevation_data(bounds):
     
     print(f"\nTotal points found across all databases: {len(all_points)}")
     if all_points:
-        print("Sample point from all points:", all_points[0])
+        print("Point distribution across all databases:")
+        lats = [p[0] for p in all_points]
+        lons = [p[1] for p in all_points]
+        print(f"Latitude range: {min(lats):.4f} to {max(lats):.4f}")
+        print(f"Longitude range: {min(lons):.4f} to {max(lons):.4f}")
+        print(f"Elevation range: {min(p[2] for p in all_points):.1f}m to {max(p[2] for p in all_points):.1f}m")
     return all_points
 
 def create_contour_map(points, width=2000, height=2000, num_contours=30, line_width=0.5, show_cities=False, color_mode='bw'):
@@ -209,23 +218,33 @@ def create_contour_map(points, width=2000, height=2000, num_contours=30, line_wi
     print(f"Contour map created successfully: {output_file}")
     return output_file
 
-def generate_contour_map(color_mode='bw', bounds=None):
-    """Generate a contour map with the specified color mode and bounds"""
-    print("\n=== Starting generate_contour_map ===")
-    # Use provided bounds or default to New Mexico bounds
-    if bounds is None:
-        bounds = {
-            'minLat': 31.20,
-            'maxLat': 37.20,
-            'minLon': -109.20,
-            'maxLon': -102.80
-        }
-    print(f"Using bounds: {bounds}")
-    
-    # Get elevation data for the specified bounds
-    print("Getting elevation data...")
+def generate_contour_map(bounds, color_mode='color'):
+    """Generate a contour map for the specified bounds"""
+    # Get elevation data
     points = get_elevation_data(bounds)
-    print(f"Got {len(points)} elevation points")
+    if not points:
+        raise ValueError("No elevation data found for the specified bounds")
+    
+    # Convert points to numpy arrays
+    lats = np.array([p[0] for p in points])
+    lons = np.array([p[1] for p in points])
+    elevations = np.array([p[2] for p in points])
+    
+    # Create a regular grid
+    grid_size = 2000  # Increased from 1000 for higher resolution
+    lat_grid = np.linspace(bounds['minLat'], bounds['maxLat'], grid_size)
+    lon_grid = np.linspace(bounds['minLon'], bounds['maxLon'], grid_size)
+    lon_mesh, lat_mesh = np.meshgrid(lon_grid, lat_grid)
+    
+    # Interpolate elevation data onto the grid
+    print("Step 2/4: Interpolating elevation data...")
+    grid_elevation = griddata((lons, lats), elevations, (lon_mesh, lat_mesh), method='cubic', fill_value=np.nan)
+    
+    # Fill NaN values with nearest neighbor interpolation
+    mask = np.isnan(grid_elevation)
+    if np.any(mask):
+        print("Filling empty cells...")
+        grid_elevation[mask] = griddata((lons, lats), elevations, (lon_mesh[mask], lat_mesh[mask]), method='nearest')
     
     # Create the elevation image
     print("Creating elevation image...")
@@ -236,12 +255,20 @@ def generate_contour_map(color_mode='bw', bounds=None):
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     print(f"Generated timestamp: {timestamp}")
     
-    # Save the map with timestamp
+    # Create the contour map
     output_file = f'public/images/contour_map_{color_mode}_{timestamp}.png'
+    print(f"Saving contour map to: {output_file}")
+    
+    # Create the map
+    create_contour_map(points, color_mode=color_mode)
+    
+    # Rename the temporary file to the timestamped version
     temp_file = f'public/images/contour_map_{color_mode}.png'
-    print(f"Renaming {temp_file} to {output_file}")
-    os.rename(temp_file, output_file)
-    print(f"File renamed successfully")
+    if os.path.exists(temp_file):
+        os.rename(temp_file, output_file)
+        print(f"Renamed {temp_file} to {output_file}")
+    else:
+        print(f"Warning: Temporary file {temp_file} not found")
     
     return output_file
 
