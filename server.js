@@ -1,11 +1,10 @@
 import express from 'express';
 import cors from 'cors';
-import Database from 'better-sqlite3';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
-import { spawn } from 'child_process';
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3';
+import sqlite3pkg from 'sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -151,6 +150,85 @@ app.get('/api/stats', (req, res) => {
         console.error('Error getting database stats:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
+});
+
+// New API endpoint to report database point counts
+const sqlite3 = sqlite3pkg.verbose();
+
+app.get('/api/db-stats', (req, res) => {
+  const dbDir = path.join(__dirname, 'grid_databases');
+  const report = {};
+
+  fs.readdir(dbDir, (err, files) => {
+    if (err) {
+      console.error('Error reading grid_databases directory:', err);
+      return res.status(500).json({ error: 'Failed to read databases' });
+    }
+
+    const dbFiles = files.filter(file => file.endsWith('.db'));
+    let completed = 0;
+
+    dbFiles.forEach(file => {
+      const dbPath = path.join(dbDir, file);
+      const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE, (err) => {
+        if (err) {
+          console.error(`Error opening database ${file}:`, err);
+          report[file] = 'Error';
+          completed++;
+          if (completed === dbFiles.length) {
+            res.json(report);
+          }
+          return;
+        }
+        db.get('SELECT COUNT(*) as count FROM elevation_points', (err, row) => {
+          if (err && err.message.includes('no such table')) {
+            // Auto-create the table and retry
+            db.run('CREATE TABLE IF NOT EXISTS elevation_points (id INTEGER PRIMARY KEY, lat REAL, lon REAL, elevation REAL, timestamp TEXT)', (createErr) => {
+              if (createErr) {
+                console.error(`Error creating table in ${file}:`, createErr);
+                report[file] = 'Error';
+                db.close();
+                completed++;
+                if (completed === dbFiles.length) {
+                  res.json(report);
+                }
+                return;
+              }
+              // Retry count after creating table
+              db.get('SELECT COUNT(*) as count FROM elevation_points', (retryErr, retryRow) => {
+                if (retryErr) {
+                  console.error(`Error querying ${file} after table creation:`, retryErr);
+                  report[file] = 'Error';
+                } else {
+                  report[file] = retryRow.count;
+                }
+                db.close();
+                completed++;
+                if (completed === dbFiles.length) {
+                  res.json(report);
+                }
+              });
+            });
+          } else if (err) {
+            console.error(`Error querying ${file}:`, err);
+            report[file] = 'Error';
+            db.close();
+            completed++;
+            if (completed === dbFiles.length) {
+              res.json(report);
+            }
+          } else {
+            report[file] = row.count;
+            db.close();
+            completed++;
+            if (completed === dbFiles.length) {
+              res.json(report);
+            }
+          }
+        });
+      });
+    });
+  });
 });
 
 // Close database connection on exit

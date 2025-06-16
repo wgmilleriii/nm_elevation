@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Database Stats</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+    tr.zero-points { background: #ffeaea; }
+    button { margin-bottom: 16px; padding: 6px 16px; font-size: 1em; }
+    .section { margin-bottom: 32px; }
+    .remote-controls { margin-bottom: 12px; }
+    .diff { background: #fffbe6; }
+    .missing { background: #ffeaea; }
+  </style>
+</head>
+<body>
+  <h1>Database Point Counts</h1>
+
+  <div class="section">
+    <h2>Local Data</h2>
+    <button onclick="loadStats()">Refresh Local</button>
+    <table id="dbTableLocal">
+      <thead>
+        <tr>
+          <th>Database</th>
+          <th>Point Count</th>
+        </tr>
+      </thead>
+      <tbody id="dbBodyLocal"></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Remote Data</h2>
+    <div class="remote-controls">
+      <input id="remoteUrl" type="text" placeholder="Remote server (e.g. http://10.0.0.68:3000)" style="width: 320px;" />
+      <button onclick="loadRemoteStats()">Fetch Remote</button>
+    </div>
+    <table id="dbTableRemote">
+      <thead>
+        <tr>
+          <th>Database</th>
+          <th>Point Count</th>
+        </tr>
+      </thead>
+      <tbody id="dbBodyRemote"></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Comparison</h2>
+    <button onclick="compareStats()">Compare</button>
+    <table id="dbTableCompare">
+      <thead>
+        <tr>
+          <th>Database</th>
+          <th>Local</th>
+          <th>Remote</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="dbBodyCompare"></tbody>
+    </table>
+  </div>
+
+  <script>
+    let localStats = {};
+    let remoteStats = {};
+
+    function loadStats() {
+      fetch('/api/db-stats')
+        .then(response => response.json())
+        .then(data => {
+          localStats = data;
+          renderTable('dbBodyLocal', data);
+        })
+        .catch(error => {
+          document.getElementById('dbBodyLocal').innerHTML = `<tr><td colspan='2'>Error: ${error}</td></tr>`;
+        });
+    }
+
+    function loadRemoteStats() {
+      const url = document.getElementById('remoteUrl').value;
+      if (!url) {
+        alert('Enter remote server URL!');
+        return;
+      }
+      fetch(url + '/api/db-stats')
+        .then(response => response.json())
+        .then(data => {
+          remoteStats = data;
+          renderTable('dbBodyRemote', data);
+        })
+        .catch(error => {
+          document.getElementById('dbBodyRemote').innerHTML = `<tr><td colspan='2'>Error: ${error}</td></tr>`;
+        });
+    }
+
+    function renderTable(tbodyId, data) {
+      const tbody = document.getElementById(tbodyId);
+      tbody.innerHTML = '';
+      Object.entries(data)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .forEach(([db, count]) => {
+          const row = document.createElement('tr');
+          if (count === 0) row.className = 'zero-points';
+          row.innerHTML = `<td>${db}</td><td>${count}</td>`;
+          tbody.appendChild(row);
+        });
+    }
+
+    function compareStats() {
+      const tbody = document.getElementById('dbBodyCompare');
+      tbody.innerHTML = '';
+      const allDbs = new Set([...Object.keys(localStats), ...Object.keys(remoteStats)]);
+      Array.from(allDbs).sort().forEach(db => {
+        const local = localStats[db];
+        const remote = remoteStats[db];
+        let status = '';
+        let rowClass = '';
+        if (local === undefined) {
+          status = 'Missing locally';
+          rowClass = 'missing';
+        } else if (remote === undefined) {
+          status = 'Missing remotely';
+          rowClass = 'missing';
+        } else if (local !== remote) {
+          status = 'Different';
+          rowClass = 'diff';
+        } else {
+          status = 'Match';
+        }
+        const row = document.createElement('tr');
+        row.className = rowClass;
+        row.innerHTML = `<td>${db}</td><td>${local !== undefined ? local : ''}</td><td>${remote !== undefined ? remote : ''}</td><td>${status}</td>`;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Initial load
+    loadStats();
+  </script>
+</body>
+</html> 
