@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sandia Mountains Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .stat-item {
+            padding: 5px 15px;
+            border-radius: 4px;
+            background: #fff;
+            border: 1px solid #ddd;
+        }
+        .stat-label {
+            font-weight: bold;
+            color: #666;
+        }
+        .stat-value {
+            color: #2196F3;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        .viewer {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .bottom-viewer {
+            height: 400px;
+            margin-top: 20px;
+        }
+        .pane {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            position: relative;
+            height: 400px;
+        }
+        .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            z-index: 100;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="range"] {
+            width: 200px;
+        }
+        button {
+            padding: 8px 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .elevation-legend {
+            position: absolute;
+            left: 10px;
+            bottom: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .legend-gradient {
+            width: 200px;
+            height: 20px;
+            margin: 5px 0;
+            background: linear-gradient(to right, 
+                hsl(240, 100%, 50%),
+                hsl(180, 100%, 50%),
+                hsl(120, 100%, 50%),
+                hsl(60, 100%, 50%),
+                hsl(0, 100%, 50%)
+            );
+        }
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Sandia Mountains Viewer</h1>
+            <p>Viewing from (35.11542, -106.4979) facing west</p>
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-label">Data Points:</span>
+                    <span class="stat-value" id="total-points">Loading...</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Last Updated:</span>
+                    <span class="stat-value" id="last-updated">Loading...</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Data Source:</span>
+                    <span class="stat-value" id="data-source">SRTM30m</span>
+                </div>
+            </div>
+        </div>
+        <div class="viewer">
+            <div class="pane" id="elevation-pane">
+                <h2>2D Elevation Profile</h2>
+                <svg id="elevation-svg" width="100%" height="100%" preserveAspectRatio="xMidYMid meet"></svg>
+                <div class="controls">
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="toggle-ridges" checked>
+                            Show Ridgelines
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <label for="observer-height">Observer Height (m)</label>
+                        <input type="range" id="observer-height" min="1500" max="2500" value="1700">
+                        <span id="height-value">1700m</span>
+                    </div>
+                    <button id="reload-data">Reload Data</button>
+                    <button id="export-svg">Export SVG</button>
+                </div>
+            </div>
+            <div class="pane" id="wireframe-pane">
+                <h2>3D Wireframe View</h2>
+                <canvas id="wireframe-canvas" width="100%" height="100%"></canvas>
+                <div class="controls">
+                    <div class="control-group">
+                        <label for="z-scale">Elevation Scale</label>
+                        <input type="range" id="z-scale" min="1" max="3" step="0.1" value="1.5">
+                        <span id="scale-value">1.5x</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="pane bottom-viewer" id="elevation-map-pane">
+            <h2>2D Elevation Map</h2>
+            <svg id="elevation-map-svg" width="100%" height="100%" preserveAspectRatio="xMidYMid meet"></svg>
+            <div class="elevation-legend">
+                <strong>Elevation (meters)</strong>
+                <div class="legend-gradient"></div>
+                <div class="legend-labels">
+                    <span id="min-elevation">1500m</span>
+                    <span id="max-elevation">3000m</span>
+                </div>
+            </div>
+            <div class="controls">
+                <div class="control-group">
+                    <label for="point-size">Point Size</label>
+                    <input type="range" id="point-size" min="1" max="10" value="3" step="0.5">
+                    <span id="size-value">3px</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="stats-container">
+        <div class="stat">
+            <label>Total Points:</label>
+            <span id="total-points">0</span>
+        </div>
+        <div class="stat">
+            <label>Data Source:</label>
+            <span id="data-source">Loading...</span>
+        </div>
+        <div class="stat">
+            <label>Last Updated:</label>
+            <span id="last-updated">-</span>
+        </div>
+    </div>
+    <script type="module" src="js/sandia-viewer.js"></script>
+</body>
+</html> 

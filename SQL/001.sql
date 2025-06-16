@@ -33,4 +33,7 @@ CREATE TABLE IF NOT EXISTS collection_stats (
     max_elevation REAL,
     avg_elevation REAL,
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
-); 
+);
+
+-- Count the number of points in the sandia_detail database
+SELECT COUNT(*) as total_points FROM elevation_points; 

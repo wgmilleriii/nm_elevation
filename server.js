@@ -46,6 +46,7 @@ app.use((req, res, next) => {
 // Middleware
 app.use(express.static('public'));
 app.use(express.json());
+app.use(cors());
 
 // Ensure logs directory exists
 const logsDir = path.join(__dirname, 'logs');
@@ -53,8 +54,9 @@ if (!fs.existsSync(logsDir)) {
     fs.mkdirSync(logsDir, { recursive: true });
 }
 
-// Initialize mother.db connection
-const db = new Database('mother.db', { fileMustExist: true });
+// Initialize Sandia database connection
+const sandiaDbPath = path.join(__dirname, 'data', 'sandia_elevation.db');
+const db = new Database(sandiaDbPath);
 
 // Logging endpoint
 app.post('/api/log', (req, res) => {
@@ -80,68 +82,42 @@ app.post('/api/log', (req, res) => {
 
 app.get('/api/elevation-data', async (req, res) => {
     try {
-        console.log('Received elevation-data request:', {
-            query: req.query,
-            headers: req.headers
-        });
-
-        const { bounds, offset = 0 } = req.query;
+        const { bounds } = req.query;
         if (!bounds) {
-            console.warn('Missing bounds parameter');
             return res.status(400).json({ error: 'Bounds parameter is required' });
         }
 
         const [south, west, north, east] = bounds.split(',').map(Number);
         if (bounds.split(',').length !== 4 || [south, west, north, east].some(isNaN)) {
-            console.warn('Invalid bounds format:', bounds);
             return res.status(400).json({ error: 'Invalid bounds format. Expected: south,west,north,east' });
         }
-        
-        console.log('Processing elevation data request for bounds:', { south, west, north, east });
-        
-        // Get points for the requested bounds
-        console.log('Querying points from mother.db...');
+
+        // Query points from the database
         const points = db.prepare(`
-            SELECT latitude, longitude, elevation
+            SELECT lat as latitude, lon as longitude, elevation
             FROM elevation_points
-            WHERE latitude BETWEEN ? AND ?
-            AND longitude BETWEEN ? AND ?
-            ORDER BY latitude, longitude
-            LIMIT 1000 OFFSET ?
-        `).all(south, north, west, east, parseInt(offset) || 0);
-        
-        // Get statistics
-        console.log('Calculating statistics...');
+            WHERE lat BETWEEN ? AND ?
+            AND lon BETWEEN ? AND ?
+            ORDER BY lat, lon
+        `).all(south, north, west, east);
+
+        // Calculate statistics
         const stats = db.prepare(`
             SELECT 
                 MIN(elevation) as min_elevation,
                 MAX(elevation) as max_elevation,
                 AVG(elevation) as avg_elevation,
-                COUNT(*) as total_count
+                COUNT(*) as total_points
             FROM elevation_points
-            WHERE latitude BETWEEN ? AND ?
-            AND longitude BETWEEN ? AND ?
+            WHERE lat BETWEEN ? AND ?
+            AND lon BETWEEN ? AND ?
         `).get(south, north, west, east);
-        
-        console.log(`Found ${points.length} points in bounds. Stats:`, stats);
-        
-        const response = {
+
+        res.json({
             success: true,
             points,
-            stats: {
-                min_elevation: stats.min_elevation,
-                max_elevation: stats.max_elevation,
-                avg_elevation: stats.avg_elevation,
-                point_count: points.length,
-                total_points: stats.total_count,
-                hasMore: points.length === 1000,
-                chunkSize: 1000
-            }
-        };
-        
-        console.log('Sending response:', response);
-        res.json(response);
-        
+            stats
+        });
     } catch (error) {
         console.error('Error processing elevation data request:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -155,13 +131,21 @@ app.get('/api/stats', (req, res) => {
                 MIN(elevation) as min_elevation,
                 MAX(elevation) as max_elevation,
                 AVG(elevation) as avg_elevation,
-                COUNT(*) as total_points
+                COUNT(*) as total_points,
+                MAX(timestamp) as last_updated
             FROM elevation_points
         `).get();
         
+        const sourceStats = db.prepare(`
+            SELECT source, COUNT(*) as count
+            FROM elevation_points
+            GROUP BY source
+        `).all();
+        
         res.json({
             success: true,
-            ...stats
+            ...stats,
+            sources: sourceStats
         });
     } catch (error) {
         console.error('Error getting database stats:', error);
