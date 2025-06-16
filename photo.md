@@ -1,0 +1,1 @@
+Now that I have 2 million data points, can I upload to you a photograph of a mountain, tell you approximately where I was standing and facing when I took the picture, and can you discern the difference between the sky and the mountain in the photograph and use the photograph to verify data in the databases?
