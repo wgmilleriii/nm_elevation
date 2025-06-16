@@ -154,3 +154,6 @@ scripts/token
 Thumbs.db
 
 mountains.db
+grid_databases/elevation_35.1000_-106.6000.db
+grid_databases/mountains_36_-109.db-journal
+grid_databases/elevation_35.1000_-106.6000.db
