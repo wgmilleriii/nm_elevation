@@ -173,52 +173,53 @@ app.get('/api/db-stats', (req, res) => {
       const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE, (err) => {
         if (err) {
           console.error(`Error opening database ${file}:`, err);
-          report[file] = 'Error';
+          report[file] = { count: 'Error', hasDuplicates: false };
           completed++;
           if (completed === dbFiles.length) {
             res.json(report);
           }
           return;
         }
-        db.get('SELECT COUNT(*) as count FROM elevation_points', (err, row) => {
-          if (err && err.message.includes('no such table')) {
-            // Auto-create the table and retry
-            db.run('CREATE TABLE IF NOT EXISTS elevation_points (id INTEGER PRIMARY KEY, lat REAL, lon REAL, elevation REAL, timestamp TEXT)', (createErr) => {
-              if (createErr) {
-                console.error(`Error creating table in ${file}:`, createErr);
-                report[file] = 'Error';
-                db.close();
-                completed++;
-                if (completed === dbFiles.length) {
-                  res.json(report);
-                }
-                return;
+
+        // First try elevation_points table
+        db.all(`
+          SELECT COUNT(*) as count,
+                 COUNT(DISTINCT latitude || ',' || longitude) as unique_points
+          FROM elevation_points
+        `, (err, rows) => {
+          if (err) {
+            // If elevation_points fails, try points table
+            db.all(`
+              SELECT COUNT(*) as count,
+                     COUNT(DISTINCT lat || ',' || lon) as unique_points
+              FROM points
+            `, (err2, rows2) => {
+              if (err2) {
+                console.error(`Error querying ${file}:`, err2);
+                report[file] = { count: 'Error', hasDuplicates: false };
+              } else {
+                const row = rows2[0];
+                const hasDuplicates = row.count !== row.unique_points;
+                report[file] = {
+                  count: row.count,
+                  hasDuplicates: hasDuplicates,
+                  uniquePoints: row.unique_points
+                };
               }
-              // Retry count after creating table
-              db.get('SELECT COUNT(*) as count FROM elevation_points', (retryErr, retryRow) => {
-                if (retryErr) {
-                  console.error(`Error querying ${file} after table creation:`, retryErr);
-                  report[file] = 'Error';
-                } else {
-                  report[file] = retryRow.count;
-                }
-                db.close();
-                completed++;
-                if (completed === dbFiles.length) {
-                  res.json(report);
-                }
-              });
+              db.close();
+              completed++;
+              if (completed === dbFiles.length) {
+                res.json(report);
+              }
             });
-          } else if (err) {
-            console.error(`Error querying ${file}:`, err);
-            report[file] = 'Error';
-            db.close();
-            completed++;
-            if (completed === dbFiles.length) {
-              res.json(report);
-            }
           } else {
-            report[file] = row.count;
+            const row = rows[0];
+            const hasDuplicates = row.count !== row.unique_points;
+            report[file] = {
+              count: row.count,
+              hasDuplicates: hasDuplicates,
+              uniquePoints: row.unique_points
+            };
             db.close();
             completed++;
             if (completed === dbFiles.length) {

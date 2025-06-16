@@ -1,148 +1,280 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Database Stats</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background-color: #f2f2f2; }
-    tr.zero-points { background: #ffeaea; }
-    button { margin-bottom: 16px; padding: 6px 16px; font-size: 1em; }
-    .section { margin-bottom: 32px; }
-    .remote-controls { margin-bottom: 12px; }
-    .diff { background: #fffbe6; }
-    .missing { background: #ffeaea; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Statistics</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        .stat-card h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+        .error {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .refresh-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 20px 0;
+        }
+        .refresh-btn:hover {
+            background: #1976D2;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section h2 {
+            color: #333;
+            border-bottom: 2px solid #2196F3;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .grid-card {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .grid-card .coords {
+            font-family: monospace;
+            font-size: 18px;
+            color: #333;
+        }
+        .grid-card .status {
+            font-size: 14px;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .status.complete {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .status.incomplete {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .status.duplicates {
+            background: #fce4ec;
+            color: #c2185b;
+        }
+        .points-info {
+            font-size: 14px;
+            color: #666;
+            margin-top: 4px;
+        }
+        .duplicate-warning {
+            color: #c2185b;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+    </style>
 </head>
 <body>
-  <h1>Database Point Counts</h1>
-
-  <div class="section">
-    <h2>Local Data</h2>
-    <button onclick="loadStats()">Refresh Local</button>
-    <table id="dbTableLocal">
-      <thead>
-        <tr>
-          <th>Database</th>
-          <th>Point Count</th>
-        </tr>
-      </thead>
-      <tbody id="dbBodyLocal"></tbody>
-    </table>
-  </div>
-
-  <div class="section">
-    <h2>Remote Data</h2>
-    <div class="remote-controls">
-      <input id="remoteUrl" type="text" placeholder="Remote server (e.g. http://10.0.0.68:3000)" style="width: 320px;" />
-      <button onclick="loadRemoteStats()">Fetch Remote</button>
+    <div class="container">
+        <div class="header">
+            <h1>Database Statistics</h1>
+            <button class="refresh-btn" onclick="loadStats()">Refresh Stats</button>
+        </div>
+        <div id="stats-container">
+            <div class="loading">Loading statistics...</div>
+        </div>
     </div>
-    <table id="dbTableRemote">
-      <thead>
-        <tr>
-          <th>Database</th>
-          <th>Point Count</th>
-        </tr>
-      </thead>
-      <tbody id="dbBodyRemote"></tbody>
-    </table>
-  </div>
 
-  <div class="section">
-    <h2>Comparison</h2>
-    <button onclick="compareStats()">Compare</button>
-    <table id="dbTableCompare">
-      <thead>
-        <tr>
-          <th>Database</th>
-          <th>Local</th>
-          <th>Remote</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody id="dbBodyCompare"></tbody>
-    </table>
-  </div>
+    <script>
+        async function loadStats() {
+            const container = document.getElementById('stats-container');
+            container.innerHTML = '<div class="loading">Loading statistics...</div>';
 
-  <script>
-    let localStats = {};
-    let remoteStats = {};
+            try {
+                // Get stats from all databases
+                const response = await fetch('/api/db-stats');
+                const data = await response.json();
 
-    function loadStats() {
-      fetch('/api/db-stats')
-        .then(response => response.json())
-        .then(data => {
-          localStats = data;
-          renderTable('dbBodyLocal', data);
-        })
-        .catch(error => {
-          document.getElementById('dbBodyLocal').innerHTML = `<tr><td colspan='2'>Error: ${error}</td></tr>`;
-        });
-    }
+                // Filter and sort 10x10 grid databases
+                const gridDbs = Object.entries(data)
+                    .filter(([db]) => /^mountains_[0-9]_[0-9]\.db$/.test(db))
+                    .sort((a, b) => {
+                        // First sort by point count
+                        const countA = a[1].count === 'Error' ? Infinity : a[1].count;
+                        const countB = b[1].count === 'Error' ? Infinity : b[1].count;
+                        if (countA !== countB) return countA - countB;
+                        
+                        // Then sort by coordinates
+                        const [x1, y1] = a[0].match(/\d+/g).map(Number);
+                        const [x2, y2] = b[0].match(/\d+/g).map(Number);
+                        if (x1 !== x2) return x1 - x2;
+                        return y1 - y2;
+                    });
 
-    function loadRemoteStats() {
-      const url = document.getElementById('remoteUrl').value;
-      if (!url) {
-        alert('Enter remote server URL!');
-        return;
-      }
-      fetch(url + '/api/db-stats')
-        .then(response => response.json())
-        .then(data => {
-          remoteStats = data;
-          renderTable('dbBodyRemote', data);
-        })
-        .catch(error => {
-          document.getElementById('dbBodyRemote').innerHTML = `<tr><td colspan='2'>Error: ${error}</td></tr>`;
-        });
-    }
+                // Calculate totals
+                let totalPoints = 0;
+                let totalUniquePoints = 0;
+                let errorCount = 0;
+                let completeCount = 0;
+                let incompleteCount = 0;
+                let duplicateCount = 0;
 
-    function renderTable(tbodyId, data) {
-      const tbody = document.getElementById(tbodyId);
-      tbody.innerHTML = '';
-      Object.entries(data)
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .forEach(([db, count]) => {
-          const row = document.createElement('tr');
-          if (count === 0) row.className = 'zero-points';
-          row.innerHTML = `<td>${db}</td><td>${count}</td>`;
-          tbody.appendChild(row);
-        });
-    }
+                gridDbs.forEach(([db, stats]) => {
+                    if (stats.count === 'Error') {
+                        errorCount++;
+                    } else {
+                        totalPoints += stats.count || 0;
+                        totalUniquePoints += stats.uniquePoints || 0;
+                        if (stats.hasDuplicates) {
+                            duplicateCount++;
+                        } else if (stats.count >= 1000) {
+                            completeCount++;
+                        } else {
+                            incompleteCount++;
+                        }
+                    }
+                });
 
-    function compareStats() {
-      const tbody = document.getElementById('dbBodyCompare');
-      tbody.innerHTML = '';
-      const allDbs = new Set([...Object.keys(localStats), ...Object.keys(remoteStats)]);
-      Array.from(allDbs).sort().forEach(db => {
-        const local = localStats[db];
-        const remote = remoteStats[db];
-        let status = '';
-        let rowClass = '';
-        if (local === undefined) {
-          status = 'Missing locally';
-          rowClass = 'missing';
-        } else if (remote === undefined) {
-          status = 'Missing remotely';
-          rowClass = 'missing';
-        } else if (local !== remote) {
-          status = 'Different';
-          rowClass = 'diff';
-        } else {
-          status = 'Match';
+                // Create stats cards
+                container.innerHTML = `
+                    <div class="section">
+                        <h2>Summary</h2>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <h3>Total Points</h3>
+                                <div class="stat-value">${totalPoints.toLocaleString()}</div>
+                                <div class="stat-label">Across all databases</div>
+                                <div class="points-info">${totalUniquePoints.toLocaleString()} unique points</div>
+                            </div>
+                            <div class="stat-card">
+                                <h3>Complete Databases</h3>
+                                <div class="stat-value">${completeCount}</div>
+                                <div class="stat-label">Databases with ≥1,000 points (no duplicates)</div>
+                            </div>
+                            <div class="stat-card">
+                                <h3>Incomplete Databases</h3>
+                                <div class="stat-value">${incompleteCount}</div>
+                                <div class="stat-label">Databases with <1,000 points</div>
+                            </div>
+                            <div class="stat-card">
+                                <h3>Databases with Duplicates</h3>
+                                <div class="stat-value">${duplicateCount}</div>
+                                <div class="stat-label">Databases containing duplicate points</div>
+                            </div>
+                            <div class="stat-card">
+                                <h3>Error Databases</h3>
+                                <div class="stat-value">${errorCount}</div>
+                                <div class="stat-label">Databases with errors</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <h2>10x10 Grid Databases (Sorted by Point Count)</h2>
+                        <div class="stats-grid">
+                            ${gridDbs.map(([db, stats]) => {
+                                const [x, y] = db.match(/\d+/g).map(Number);
+                                let status, statusText;
+                                
+                                if (stats.count === 'Error') {
+                                    status = 'error';
+                                    statusText = 'Error';
+                                } else if (stats.hasDuplicates) {
+                                    status = 'duplicates';
+                                    statusText = 'Has Duplicates';
+                                } else if (stats.count >= 1000) {
+                                    status = 'complete';
+                                    statusText = 'Complete';
+                                } else {
+                                    status = 'incomplete';
+                                    statusText = 'Incomplete';
+                                }
+
+                                const pointCount = stats.count === 'Error' ? 'Error' : 
+                                    (stats.count || 0).toLocaleString();
+                                const duplicateCount = stats.count !== 'Error' && stats.hasDuplicates ? 
+                                    (stats.count - stats.uniquePoints) : 0;
+
+                                return `
+                                    <div class="grid-card">
+                                        <div>
+                                            <div class="coords">(${x},${y})</div>
+                                            <div class="points-info">
+                                                ${pointCount} points
+                                                ${duplicateCount > 0 ? 
+                                                    `<div class="duplicate-warning">${duplicateCount} duplicates</div>` : ''}
+                                            </div>
+                                        </div>
+                                        <div class="status ${status}">${statusText}</div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                container.innerHTML = `
+                    <div class="error">
+                        Error loading statistics: ${error.message}
+                    </div>
+                `;
+            }
         }
-        const row = document.createElement('tr');
-        row.className = rowClass;
-        row.innerHTML = `<td>${db}</td><td>${local !== undefined ? local : ''}</td><td>${remote !== undefined ? remote : ''}</td><td>${status}</td>`;
-        tbody.appendChild(row);
-      });
-    }
 
-    // Initial load
-    loadStats();
-  </script>
+        // Load stats when page loads
+        loadStats();
+    </script>
 </body>
 </html> 
