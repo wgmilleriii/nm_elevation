@@ -4,7 +4,7 @@ const VERSION = '3.2.0';
 class GPSLiveTracker {
     constructor() {
         // Enhanced logging for iPhone debugging
-        console.log('🚀 GPS Live Tracker v3.4.3 starting...');
+        console.log('🚀 GPS Live Tracker v3.4.4 starting...');
         console.log('📱 User Agent:', navigator.userAgent);
         console.log('🌐 Location:', window.location.href);
         console.log('⏰ Timestamp:', new Date().toISOString());
@@ -764,8 +764,8 @@ class GPSLiveTracker {
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 5000,
-                    maximumAge: 0
+                    timeout: 15000, // Increased from 5s to 15s for mobile
+                    maximumAge: 5000 // Allow 5s old readings to reduce timeouts
                 }
             );
 
@@ -783,11 +783,38 @@ class GPSLiveTracker {
                 error => reject(error),
                 {
                     enableHighAccuracy: true,
-                    timeout: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 8000 : 15000, // Faster timeout for mobile
-                    maximumAge: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 2000 : 5000 // Fresher data for mobile
+                    timeout: 15000, // Consistent 15s timeout for all devices
+                    maximumAge: 5000 // Allow 5s old readings to reduce timeouts
                 }
             );
         });
+    }
+
+    // Fallback GPS polling method for when watchPosition fails
+    startPollingGPS() {
+        console.log('🔄 Starting GPS polling fallback...');
+        this.logToServer('info', 'Starting GPS polling fallback');
+        
+        // Clear any existing watch
+        if (this.watchId) {
+            navigator.geolocation.clearWatch(this.watchId);
+            this.watchId = null;
+        }
+        
+        // Start polling every 10 seconds
+        this.pollingInterval = setInterval(async () => {
+            try {
+                console.log('📍 Polling GPS position...');
+                const position = await this.getCurrentPosition();
+                console.log('✅ Polling GPS success:', position.coords);
+                this.handlePosition(position);
+            } catch (error) {
+                console.error('❌ Polling GPS error:', error);
+                // If polling also fails, try again in 30 seconds
+            }
+        }, 10000);
+        
+        this.updateGPSStatus('warning', 'GPS polling mode (fallback)');
     }
 
     updateAccuracyDisplay(accuracy) {
@@ -1280,7 +1307,18 @@ class GPSLiveTracker {
         this.updateGPSStatus('error', errorMessage);
         this.showPopup();
 
-        alert(errorMessage);
+        // For timeout errors, try a different approach
+        if (error.code === 3) { // TIMEOUT
+            console.log('⏰ GPS timeout - trying fallback approach...');
+            this.logToServer('info', 'GPS timeout - trying fallback');
+            
+            // Try polling getCurrentPosition instead of watchPosition
+            setTimeout(() => {
+                this.startPollingGPS();
+            }, 2000);
+        } else {
+            alert(errorMessage);
+        }
     }
 
     calculateSpeed(point1, point2) {
