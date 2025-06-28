@@ -1,5 +1,5 @@
 // Version information
-const VERSION = '3.0.0';
+const VERSION = '3.6.0';
 
 class GPSLiveTracker {
     constructor() {

@@ -1,10 +1,10 @@
 // Version information
-const VERSION = '3.2.0';
+const VERSION = '3.6.0';
 
 class GPSLiveTracker {
     constructor() {
         // Enhanced logging for iPhone debugging
-        console.log('🚀 GPS Live Tracker v3.4.6 starting...');
+        console.log('🚀 GPS Live Tracker v3.6.0 starting...');
         console.log('📱 User Agent:', navigator.userAgent);
         console.log('🌐 Location:', window.location.href);
         console.log('⏰ Timestamp:', new Date().toISOString());
@@ -336,6 +336,64 @@ class GPSLiveTracker {
         return deviceId;
     }
 
+    // Session persistence methods
+    saveSessionToStorage() {
+        if (this.sessionId && this.userId) {
+            // Use sessionStorage for current browser session
+            sessionStorage.setItem('gps_session_id', this.sessionId);
+            sessionStorage.setItem('gps_user_id', this.userId);
+            sessionStorage.setItem('gps_session_number', this.sessionNumber || '');
+            console.log('💾 Session saved to storage:', this.sessionId);
+        }
+    }
+
+    loadSessionFromStorage() {
+        const sessionId = sessionStorage.getItem('gps_session_id');
+        const userId = sessionStorage.getItem('gps_user_id');
+        const sessionNumber = sessionStorage.getItem('gps_session_number');
+        
+        if (sessionId && userId) {
+            console.log('📂 Loading session from storage:', sessionId);
+            return {
+                sessionId,
+                userId,
+                sessionNumber: sessionNumber || null
+            };
+        }
+        return null;
+    }
+
+    clearSessionStorage() {
+        sessionStorage.removeItem('gps_session_id');
+        sessionStorage.removeItem('gps_user_id');
+        sessionStorage.removeItem('gps_session_number');
+        console.log('🗑️ Session storage cleared');
+    }
+
+    // Validate session with server
+    async validateSessionWithServer(sessionId, userId) {
+        try {
+            console.log('🔍 Validating session with server:', sessionId);
+            const response = await fetch(`./api/user-sessions?userId=${userId}`);
+            if (response.ok) {
+                const data = await response.json();
+                const activeSessions = data.sessions.filter(s => s.status === 'active');
+                const validSession = activeSessions.find(s => s.sessionId === sessionId);
+                
+                if (validSession) {
+                    console.log('✅ Session valid on server:', sessionId);
+                    return validSession;
+                } else {
+                    console.log('❌ Session not found or inactive on server:', sessionId);
+                    return null;
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error validating session with server:', error);
+        }
+        return null;
+    }
+
     setupNewSessionButton() {
         if (this.elements.newSessionBtn) {
             this.elements.newSessionBtn.addEventListener('click', async () => {
@@ -374,6 +432,9 @@ class GPSLiveTracker {
             await this.endTracking();
         }
 
+        // Clear old session storage
+        this.clearSessionStorage();
+
         // Start new session
         console.log('🚀 Creating new session...');
         const sessionResponse = await fetch('./api/user/session/start', {
@@ -396,6 +457,9 @@ class GPSLiveTracker {
         this.sessionId = sessionData.sessionId;
         this.sessionNumber = sessionData.globalNumber; // Use the global session number from server
         console.log('✅ New session created:', this.sessionId, 'Global #:', this.sessionNumber);
+        
+        // Save new session to storage
+        this.saveSessionToStorage();
         
         // Update UI with correct global session number
         this.updateUserDisplay();
@@ -432,7 +496,7 @@ class GPSLiveTracker {
             console.log('🚀 Starting user initialization...');
             console.log('📱 Device ID:', this.deviceId);
             
-            // Use relative path that will work with deployed server
+            // Always initialize user first based on device ID
             console.log('📡 Calling user init API...');
             const response = await fetch('./api/user/init', {
                 method: 'POST',
@@ -453,17 +517,41 @@ class GPSLiveTracker {
             const data = await response.json();
             this.userId = data.userId;
             console.log('✅ User initialized:', this.userId);
+            
+            // Now check if we have a session stored in sessionStorage (browser refresh case)
+            const storedSession = this.loadSessionFromStorage();
+            if (storedSession && storedSession.userId === this.userId && !this.isSessionExpired(storedSession.sessionId)) {
+                console.log('♻️ Found stored session for same user, validating with server:', storedSession.sessionId);
+                
+                // Validate stored session with server
+                const validSession = await this.validateSessionWithServer(storedSession.sessionId, storedSession.userId);
+                if (validSession) {
+                    console.log('✅ Stored session is valid on server, resuming:', storedSession.sessionId);
+                    this.sessionId = storedSession.sessionId;
+                    this.sessionNumber = validSession.globalNumber || storedSession.sessionNumber;
+                    this.updateUserDisplay();
+                    console.log('✅ Session resumed from storage - User:', this.userId, 'Session #:', this.sessionNumber);
+                    return;
+                } else {
+                    console.log('❌ Stored session invalid on server, will create new session for same user');
+                    this.clearSessionStorage();
+                }
+            } else if (storedSession && storedSession.userId !== this.userId) {
+                console.log('🔄 Stored session belongs to different user, clearing storage');
+                this.clearSessionStorage();
+            }
 
-            // Check for existing active session first
-            console.log('🔍 Checking for existing sessions...');
+            // Check for existing active session on server for this user
+            console.log('🔍 Checking for existing sessions on server...');
             const existingSession = await this.getActiveSession();
             
             if (existingSession && !this.isSessionExpired(existingSession.sessionId)) {
-                console.log('♻️ Resuming existing session:', existingSession.sessionId);
+                console.log('♻️ Resuming existing session from server:', existingSession.sessionId);
                 this.sessionId = existingSession.sessionId;
+                this.sessionNumber = existingSession.globalNumber;
             } else {
-                // Start a new tracking session
-                console.log('📡 Creating new session...');
+                // Start a new tracking session for this user
+                console.log('📡 Creating new session for user:', this.userId);
                 const sessionResponse = await fetch('./api/user/session/start', {
                     method: 'POST',
                     headers: {
@@ -486,11 +574,8 @@ class GPSLiveTracker {
                 console.log('✅ New session created:', this.sessionId, 'Global #:', this.sessionNumber);
             }
             
-            // If resuming existing session, get its global number
-            if (existingSession && existingSession.globalNumber) {
-                this.sessionNumber = existingSession.globalNumber;
-                console.log('♻️ Resumed session global number:', this.sessionNumber);
-            }
+            // Save session to storage for future refreshes
+            this.saveSessionToStorage();
             
             console.log('🎯 Session ready:', this.sessionId, 'Session #:', this.sessionNumber);
 
@@ -910,70 +995,111 @@ class GPSLiveTracker {
         
         console.log(`GPS position accepted: ${accuracy}m accuracy`);
 
-        // Create new track point with enhanced data
-        const point = {
-            lat: latitude,
-            lon: longitude,
-            elevation: altitude || null,
-            accuracy,
-            heading: gpsHeading || this.compassHeading || this.lastHeading,
-            gpsHeading: gpsHeading,
-            compassHeading: this.compassHeading,
-            speed: finalSpeed,
-            gpsSpeed: speed ? speed * 3.6 : null,
-            calculatedSpeed: calculatedSpeed,
-            timestamp
-        };
+        // Fetch elevation from API for accurate terrain data
+        this.getElevation(latitude, longitude).then(elevation => {
+            // Create new track point with enhanced data
+            const point = {
+                lat: latitude,
+                lon: longitude,
+                elevation: elevation,
+                gpsAltitude: altitude, // Keep GPS altitude for reference
+                accuracy,
+                heading: gpsHeading || this.compassHeading || this.lastHeading,
+                gpsHeading: gpsHeading,
+                compassHeading: this.compassHeading,
+                speed: finalSpeed,
+                gpsSpeed: speed ? speed * 3.6 : null,
+                calculatedSpeed: calculatedSpeed,
+                timestamp
+            };
 
-        // Store current position for next calculation
-        this.lastPosition = {
-            lat: latitude,
-            lon: longitude,
-            timestamp: timestamp
-        };
+            // Store current position for next calculation
+            this.lastPosition = {
+                lat: latitude,
+                lon: longitude,
+                timestamp: timestamp
+            };
 
-        // Update speed samples for smoothing
-        this.speedSamples.push(finalSpeed);
-        if (this.speedSamples.length > this.maxSpeedSamples) {
-            this.speedSamples.shift();
-        }
+            // Update speed samples for smoothing
+            this.speedSamples.push(finalSpeed);
+            if (this.speedSamples.length > this.maxSpeedSamples) {
+                this.speedSamples.shift();
+            }
 
-        // Calculate smoothed speed
-        const smoothedSpeed = this.speedSamples.reduce((a, b) => a + b, 0) / this.speedSamples.length;
-        point.smoothedSpeed = smoothedSpeed;
+            // Calculate smoothed speed
+            const smoothedSpeed = this.speedSamples.reduce((a, b) => a + b, 0) / this.speedSamples.length;
+            point.smoothedSpeed = smoothedSpeed;
 
-        // Add point to track
-        this.trackPoints.push(point);
-        if (this.trackPoints.length > this.maxPoints) {
-            this.trackPoints.shift();
-        }
+            // Add point to track
+            this.trackPoints.push(point);
+            if (this.trackPoints.length > this.maxPoints) {
+                this.trackPoints.shift();
+            }
 
-        // Update heading for compass
-        if (point.heading !== null) {
-            this.lastHeading = point.heading;
-        }
+            // Update heading for compass
+            if (point.heading !== null) {
+                this.lastHeading = point.heading;
+            }
 
-        // Update UI with enhanced data
-        this.updateUI(point);
-        
-        // Update map with constant tracking
-        this.updateMap(point);
-        
-        // Update elevation profile
-        this.updateElevationProfile();
+            // Update UI with enhanced data
+            this.updateUI(point);
+            
+            // Update map with constant tracking
+            this.updateMap(point);
+            
+            // Update elevation profile
+            this.updateElevationProfile();
 
-        // Update speed history
-        this.updateSpeedHistory();
+            // Update speed history
+            this.updateSpeedHistory();
 
-        // Save point to database
-        this.savePoint(point).catch(error => {
-            console.error('Error saving point:', error);
+            // Save point to database
+            this.savePoint(point).catch(error => {
+                console.error('Error saving point:', error);
+            });
+        }).catch(error => {
+            console.error('Error getting elevation:', error);
+            // Fallback: create point with GPS altitude or simulated elevation
+            const point = {
+                lat: latitude,
+                lon: longitude,
+                elevation: altitude || this.simulateElevation(latitude, longitude),
+                gpsAltitude: altitude,
+                accuracy,
+                heading: gpsHeading || this.compassHeading || this.lastHeading,
+                gpsHeading: gpsHeading,
+                compassHeading: this.compassHeading,
+                speed: finalSpeed,
+                gpsSpeed: speed ? speed * 3.6 : null,
+                calculatedSpeed: calculatedSpeed,
+                timestamp
+            };
+
+            // Continue with point processing even if elevation fetch fails
+            this.lastPosition = { lat: latitude, lon: longitude, timestamp: timestamp };
+            this.speedSamples.push(finalSpeed);
+            if (this.speedSamples.length > this.maxSpeedSamples) {
+                this.speedSamples.shift();
+            }
+            point.smoothedSpeed = this.speedSamples.reduce((a, b) => a + b, 0) / this.speedSamples.length;
+            this.trackPoints.push(point);
+            if (this.trackPoints.length > this.maxPoints) {
+                this.trackPoints.shift();
+            }
+            if (point.heading !== null) {
+                this.lastHeading = point.heading;
+            }
+            this.updateUI(point);
+            this.updateMap(point);
+            this.updateElevationProfile();
+            this.updateSpeedHistory();
+            this.savePoint(point).catch(err => console.error('Error saving point:', err));
         });
     }
 
     async getElevation(lat, lon) {
         try {
-            const response = await fetch(`/api/elevation?lat=${lat}&lon=${lon}`);
+            const response = await fetch(`./api/elevation?lat=${lat}&lon=${lon}`);
             if (!response.ok) {
                 throw new Error(`Failed to fetch elevation: ${response.statusText}`);
             }
@@ -1177,6 +1303,42 @@ class GPSLiveTracker {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('Save point failed:', response.status, errorText);
+                
+                // Check if it's a session validation error
+                if (response.status === 400 && errorText.includes('INVALID_SESSION')) {
+                    console.log('🔄 Session invalid, creating new session and retrying...');
+                    
+                    // Clear invalid session from storage
+                    this.clearSessionStorage();
+                    
+                    // Create new session
+                    await this.startNewSession();
+                    
+                    // Retry saving the point with new session
+                    console.log('🔄 Retrying point save with new session...');
+                    const retryResponse = await fetch('./api/user/track-point', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            userId: this.userId,
+                            sessionId: this.sessionId,
+                            point
+                        })
+                    });
+
+                    if (!retryResponse.ok) {
+                        const retryErrorText = await retryResponse.text();
+                        console.error('Retry save point failed:', retryResponse.status, retryErrorText);
+                        throw new Error(`Failed to save track point after retry: ${retryResponse.status}`);
+                    }
+
+                    const retryData = await retryResponse.json();
+                    console.log('✅ Point saved successfully after session recovery:', retryData);
+                    return;
+                }
+                
                 throw new Error(`Failed to save track point: ${response.status}`);
             }
 
@@ -1185,6 +1347,14 @@ class GPSLiveTracker {
             
         } catch (error) {
             console.error('Error saving track point:', error);
+            
+            // Log the error to server for debugging
+            this.logToServer('error', 'Failed to save track point', {
+                error: error.message,
+                userId: this.userId,
+                sessionId: this.sessionId,
+                point: point
+            });
         }
     }
 

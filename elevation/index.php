@@ -197,6 +197,12 @@ switch ($path) {
         }
         break;
         
+    case '/api/elevation':
+        if ($method === 'GET') {
+            handleElevation();
+        }
+        break;
+        
     case '/api/server/version':
         if ($method === 'GET') {
             handleServerVersion();
@@ -413,6 +419,13 @@ function handleTrackPoint() {
     
     $userData = json_decode(file_get_contents($userFile), true);
     
+    // Ensure sessions array exists
+    if (!$userData || !isset($userData['sessions']) || !is_array($userData['sessions'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'User data corrupted or no sessions found', 'code' => 'INVALID_USER_DATA']);
+        return;
+    }
+    
     // Find active session
     $sessionIndex = -1;
     foreach ($userData['sessions'] as $index => $session) {
@@ -550,11 +563,11 @@ function isActiveSession($userId, $sessionId) {
     if (!file_exists($userFile)) return false;
     
     $userData = json_decode(file_get_contents($userFile), true);
-    if (!$userData || !isset($userData['sessions'])) return false;
+    if (!$userData || !isset($userData['sessions']) || !is_array($userData['sessions'])) return false;
     
     foreach ($userData['sessions'] as $session) {
-        if ($session['sessionId'] === $sessionId) {
-            return $session['status'] === 'active';
+        if (isset($session['sessionId']) && $session['sessionId'] === $sessionId) {
+            return isset($session['status']) && $session['status'] === 'active';
         }
     }
     return false;
@@ -1444,5 +1457,128 @@ function cleanupStaleSessions() {
     }
     
     return $cleanedCount;
+}
+
+function handleElevation() {
+    $lat = $_GET['lat'] ?? null;
+    $lon = $_GET['lon'] ?? null;
+    
+    if (!$lat || !$lon) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Latitude and longitude required']);
+        return;
+    }
+    
+    $latitude = floatval($lat);
+    $longitude = floatval($lon);
+    
+    // Validate coordinates
+    if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid coordinates']);
+        return;
+    }
+    
+    // Try to get elevation from grid databases
+    $elevation = getElevationFromGrid($latitude, $longitude);
+    
+    if ($elevation !== null) {
+        echo json_encode([
+            'elevation' => $elevation,
+            'lat' => $latitude,
+            'lon' => $longitude,
+            'source' => 'grid_database',
+            'timestamp' => date('c')
+        ]);
+    } else {
+        // Fallback to simulated elevation for areas without data
+        $simulatedElevation = simulateElevation($latitude, $longitude);
+        echo json_encode([
+            'elevation' => $simulatedElevation,
+            'lat' => $latitude,
+            'lon' => $longitude,
+            'source' => 'simulated',
+            'timestamp' => date('c')
+        ]);
+    }
+}
+
+function getElevationFromGrid($lat, $lon) {
+    // Check if we have elevation data in any of the grid databases
+    $gridFiles = glob('../grid_databases/*.db');
+    
+    foreach ($gridFiles as $gridFile) {
+        try {
+            // Suppress warnings for databases that don't have the table
+            $db = @new SQLite3($gridFile);
+            if (!$db) continue;
+            
+            // Check if table exists first
+            $tableCheck = @$db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='elevation_points'");
+            if (!$tableCheck) {
+                $db->close();
+                continue;
+            }
+            
+            // Look for elevation data near this coordinate
+            $stmt = @$db->prepare('
+                SELECT elevation 
+                FROM elevation_points 
+                WHERE ABS(latitude - ?) < 0.001 AND ABS(longitude - ?) < 0.001 
+                ORDER BY ABS(latitude - ?) + ABS(longitude - ?) 
+                LIMIT 1
+            ');
+            
+            if ($stmt === false) {
+                $db->close();
+                continue;
+            }
+            
+            $stmt->bindValue(1, $lat, SQLITE3_FLOAT);
+            $stmt->bindValue(2, $lon, SQLITE3_FLOAT);
+            $stmt->bindValue(3, $lat, SQLITE3_FLOAT);
+            $stmt->bindValue(4, $lon, SQLITE3_FLOAT);
+            
+            $result = @$stmt->execute();
+            if (!$result) {
+                $db->close();
+                continue;
+            }
+            
+            $row = $result->fetchArray(SQLITE3_ASSOC);
+            
+            if ($row && isset($row['elevation'])) {
+                $elevation = floatval($row['elevation']);
+                $db->close();
+                return $elevation;
+            }
+            
+            $db->close();
+        } catch (Exception $e) {
+            // Continue to next database if this one fails
+            continue;
+        }
+    }
+    
+    return null;
+}
+
+function simulateElevation($lat, $lon) {
+    // Base elevation around 1500m (typical for New Mexico)
+    $elevation = 1500;
+    
+    // Add variation based on latitude (higher in north)
+    $elevation += ($lat - 34) * 100;
+    
+    // Add some longitude-based variation
+    $elevation += sin($lon * 0.5) * 200;
+    
+    // Add some random variation (±100m)
+    $elevation += (mt_rand() / mt_getrandmax() - 0.5) * 200;
+    
+    // Ensure elevation stays within reasonable bounds
+    $elevation = max(1000, min(4000, $elevation));
+    
+    return round($elevation, 1);
 }
 ?> 
