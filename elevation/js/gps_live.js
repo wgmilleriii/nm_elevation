@@ -4,7 +4,7 @@ const VERSION = '3.2.0';
 class GPSLiveTracker {
     constructor() {
         // Enhanced logging for iPhone debugging
-        console.log('🚀 GPS Live Tracker v3.4.0 starting...');
+        console.log('🚀 GPS Live Tracker v3.4.1 starting...');
         console.log('📱 User Agent:', navigator.userAgent);
         console.log('🌐 Location:', window.location.href);
         console.log('⏰ Timestamp:', new Date().toISOString());
@@ -337,16 +337,20 @@ class GPSLiveTracker {
     }
 
     setupNewSessionButton() {
-        this.elements.newSessionBtn.addEventListener('click', async () => {
-            try {
-                console.log('🔄 Starting new session manually...');
-                await this.startNewSession();
-                console.log('✅ New session started successfully');
-            } catch (error) {
-                console.error('❌ Failed to start new session:', error);
-                alert('Failed to start new session. Please try again.');
-            }
-        });
+        if (this.elements.newSessionBtn) {
+            this.elements.newSessionBtn.addEventListener('click', async () => {
+                try {
+                    console.log('🔄 Starting new session manually...');
+                    await this.startNewSession();
+                    console.log('✅ New session started successfully');
+                } catch (error) {
+                    console.error('❌ Failed to start new session:', error);
+                    alert('Failed to start new session. Please try again.');
+                }
+            });
+        } else {
+            console.warn('❌ New session button not found: new-session-btn');
+        }
     }
 
     updateUserDisplay() {
