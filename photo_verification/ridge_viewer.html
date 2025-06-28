@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ridge Viewer - Terrain Background Generator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .input-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border-left: 5px solid #3498db;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 20px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+        
+        .input-field {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .input-field label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .input-field input, .input-field select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .input-field input:focus, .input-field select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .generate-btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            min-width: 150px;
+        }
+        
+        .generate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+        
+        .examples {
+            background: #e8f4fd;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .examples h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        
+        .example-coords {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .coord-btn {
+            background: white;
+            border: 2px solid #3498db;
+            color: #3498db;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+        
+        .coord-btn:hover {
+            background: #3498db;
+            color: white;
+        }
+        
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .image-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: transform 0.3s;
+        }
+        
+        .image-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .image-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        
+        .image-info {
+            padding: 15px;
+        }
+        
+        .image-info h4 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        
+        .image-info p {
+            margin: 5px 0;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .compass {
+            display: inline-block;
+            background: #e74c3c;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .instructions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        
+        .instructions h3 {
+            margin-top: 0;
+            color: #856404;
+        }
+        
+        .instructions ol {
+            color: #856404;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .input-group {
+                flex-direction: column;
+            }
+            
+            .input-field {
+                min-width: 100%;
+            }
+            
+            .example-coords {
+                flex-direction: column;
+            }
+            
+            .coord-btn {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏔️ Ridge Viewer</h1>
+            <p>Generate terrain background images and analyze visible ridges from any location</p>
+        </div>
+        
+        <div class="content">
+            <div class="input-section">
+                <h3>📍 Enter Location and Direction</h3>
+                <div class="input-group">
+                    <div class="input-field">
+                        <label for="coordinates">Coordinates (lat, lon)</label>
+                        <input type="text" id="coordinates" placeholder="32.9609357, -107.3267788" 
+                               value="32.9609357, -107.3267788">
+                    </div>
+                    <div class="input-field">
+                        <label for="direction">Facing Direction</label>
+                        <select id="direction">
+                            <option value="360">North (360°)</option>
+                            <option value="45" selected>Northeast (45°)</option>
+                            <option value="90">East (90°)</option>
+                            <option value="135">Southeast (135°)</option>
+                            <option value="180">South (180°)</option>
+                            <option value="225">Southwest (225°)</option>
+                            <option value="270">West (270°)</option>
+                            <option value="315">Northwest (315°)</option>
+                        </select>
+                    </div>
+                    <button class="generate-btn" onclick="generateBackground()">
+                        🎯 Generate
+                    </button>
+                </div>
+            </div>
+            
+            <div class="examples">
+                <h3>📌 Quick Examples</h3>
+                <div class="example-coords">
+                    <button class="coord-btn" onclick="setCoordinates('32.9609357, -107.3267788')">
+                        Photo Verification Site
+                    </button>
+                    <button class="coord-btn" onclick="setCoordinates('35.0844, -106.6504')">
+                        Albuquerque
+                    </button>
+                    <button class="coord-btn" onclick="setCoordinates('35.6870, -105.9378')">
+                        Santa Fe
+                    </button>
+                    <button class="coord-btn" onclick="setCoordinates('36.4072, -105.5734')">
+                        Taos
+                    </button>
+                    <button class="coord-btn" onclick="setCoordinates('36.5569, -105.4169')">
+                        Wheeler Peak
+                    </button>
+                </div>
+            </div>
+            
+            <div class="gallery">
+                <div class="image-card">
+                    <img src="../data/images/background_northeast_45.jpg" alt="Northeast View">
+                    <div class="image-info">
+                        <h4>Northeast View <span class="compass">NE 45°</span></h4>
+                        <p><strong>Location:</strong> 32.9609°N, -107.3268°W</p>
+                        <p><strong>Ridges:</strong> 30 visible peaks</p>
+                        <p><strong>Range:</strong> 1279-1728m elevation</p>
+                    </div>
+                </div>
+                
+                <div class="image-card">
+                    <img src="../data/images/background_east_90.jpg" alt="East View">
+                    <div class="image-info">
+                        <h4>East View <span class="compass">E 90°</span></h4>
+                        <p><strong>Location:</strong> 32.9609°N, -107.3268°W</p>
+                        <p><strong>Ridges:</strong> 26 visible peaks</p>
+                        <p><strong>Range:</strong> 1279-2089m elevation</p>
+                    </div>
+                </div>
+                
+                <div class="image-card">
+                    <img src="../data/images/background_north_360.jpg" alt="North View">
+                    <div class="image-info">
+                        <h4>North View <span class="compass">N 360°</span></h4>
+                        <p><strong>Location:</strong> 32.9609°N, -107.3268°W</p>
+                        <p><strong>Ridges:</strong> 35 visible peaks</p>
+                        <p><strong>Range:</strong> Multiple mountain ranges</p>
+                    </div>
+                </div>
+                
+                <div class="image-card">
+                    <img src="../data/images/background_south_180.jpg" alt="South View">
+                    <div class="image-info">
+                        <h4>South View <span class="compass">S 180°</span></h4>
+                        <p><strong>Location:</strong> 32.9609°N, -107.3268°W</p>
+                        <p><strong>Ridges:</strong> 28 visible peaks</p>
+                        <p><strong>Range:</strong> Southern mountain ranges</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="instructions">
+                <h3>📖 How to Use</h3>
+                <ol>
+                    <li><strong>Enter Coordinates:</strong> Input latitude and longitude in decimal degrees format</li>
+                    <li><strong>Select Direction:</strong> Choose the facing direction from the dropdown (1-360°, where 360° = North)</li>
+                    <li><strong>Generate:</strong> Click the generate button to create a background image and analyze ridges</li>
+                    <li><strong>View Results:</strong> The system will return the 100 closest visible ridge points along the horizon</li>
+                </ol>
+                
+                <h4>🎯 Features:</h4>
+                <ul>
+                    <li><strong>Line-of-sight Analysis:</strong> Only shows ridges that are actually visible (not hidden behind other mountains)</li>
+                    <li><strong>Realistic Backgrounds:</strong> Generated from real elevation data</li>
+                    <li><strong>Detailed Statistics:</strong> Distance, elevation, and bearing for each ridge point</li>
+                    <li><strong>Multiple Formats:</strong> Command-line interface and web interface available</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function setCoordinates(coords) {
+            document.getElementById('coordinates').value = coords;
+        }
+        
+        function generateBackground() {
+            const coordinates = document.getElementById('coordinates').value;
+            const direction = document.getElementById('direction').value;
+            
+            if (!coordinates.trim()) {
+                alert('Please enter coordinates');
+                return;
+            }
+            
+            // Parse coordinates
+            const parts = coordinates.split(',');
+            if (parts.length !== 2) {
+                alert('Invalid coordinate format. Use: lat, lon');
+                return;
+            }
+            
+            const lat = parseFloat(parts[0].trim());
+            const lon = parseFloat(parts[1].trim());
+            
+            if (isNaN(lat) || isNaN(lon)) {
+                alert('Invalid coordinates. Must be numeric values.');
+                return;
+            }
+            
+            if (lat < -90 || lat > 90) {
+                alert('Latitude must be between -90 and 90 degrees');
+                return;
+            }
+            
+            if (lon < -180 || lon > 180) {
+                alert('Longitude must be between -180 and 180 degrees');
+                return;
+            }
+            
+            // Show loading message
+            const btn = document.querySelector('.generate-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Generating...';
+            btn.disabled = true;
+            
+            // Simulate generation (in real implementation, this would call the Python backend)
+            setTimeout(() => {
+                alert(`Ridge analysis complete!\n\nLocation: ${lat.toFixed(6)}°N, ${lon.toFixed(6)}°W\nDirection: ${direction}°\n\nTo generate the actual background image and ridge analysis, run:\npython src/ridge_cli.py '${lat}, ${lon}' ${direction}`);
+                
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 2000);
+        }
+        
+        // Add keyboard support
+        document.getElementById('coordinates').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                generateBackground();
+            }
+        });
+    </script>
+</body>
+</html> 

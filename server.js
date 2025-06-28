@@ -205,13 +205,13 @@ app.get('/api/db-stats', (req, res) => {
                   hasDuplicates: hasDuplicates,
                   uniquePoints: row.unique_points
                 };
-              }
-              db.close();
-              completed++;
-              if (completed === dbFiles.length) {
-                res.json(report);
-              }
-            });
+                }
+                db.close();
+                completed++;
+                if (completed === dbFiles.length) {
+                  res.json(report);
+                }
+              });
           } else {
             const row = rows[0];
             const hasDuplicates = row.count !== row.unique_points;

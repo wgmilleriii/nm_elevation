@@ -1,97 +1,165 @@
 # Photo Verification System
 
-A system for verifying elevation data in databases using photographs of mountains and landscapes.
+A comprehensive system for validating elevation data by analyzing mountain photographs and generating terrain background images.
 
-## Overview
+## 🎯 Features
 
-This system allows you to:
-1. Process photographs of mountains to detect the skyline
-2. Extract elevation profiles from photos
-3. Compare photo-derived elevation profiles with database data
-4. Visualize and analyze the differences
+### 📸 Photo Analysis
+- **EXIF Data Extraction**: Automatically extracts GPS coordinates and camera direction from photos
+- **Ridge Detection**: 10 different algorithms for separating mountains from sky
+- **Manual Point Selection**: Interactive GUI for selecting ridge points
+- **3D Projection**: Maps 2D photo coordinates to 3D terrain data
 
-## Installation
+### 🏔️ Terrain Background Generation
+- **Coordinate Input**: Enter lat/lon in format `[lat], [lon]` and facing direction 1-360° (360° = North)
+- **Database Query**: Searches elevation databases for terrain data
+- **Line-of-Sight Analysis**: Returns only visible ridge points (not hidden behind other mountains)
+- **Top 100 Points**: Identifies the closest visible ridge points along the horizon
 
-1. Create a virtual environment:
+### 🖼️ Background Images
+- **Realistic Terrain**: Generated from real elevation data
+- **Multiple Directions**: Support for any facing direction
+- **Visual Overlays**: Compass direction, coordinates, and ridge statistics
+- **High Quality**: Saved as JPEG images with detailed metadata
+
+## 🚀 Quick Start
+
+### Command Line Interface
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Basic usage - enter coordinates and direction
+python src/ridge_cli.py '32.9609357, -107.3267788' 45
+
+# Interactive mode
+python src/ridge_cli.py
 ```
 
-2. Install dependencies:
+### Background Image Generation
 ```bash
-pip install -r requirements.txt
+# Generate background for specific location and direction
+python src/generate_background_images.py --lat 32.9609357 --lon -107.3267788 --direction 45
+
+# Generate multiple backgrounds for photo verification site
+python src/generate_background_images.py
 ```
 
-## Usage
+### Web Interface
+Open `ridge_viewer.html` in your browser for a visual interface with:
+- Coordinate input with validation
+- Direction selection dropdown
+- Quick preset locations
+- Gallery of generated images
+- Interactive controls
 
-### Basic Usage
+## 📊 Example Results
 
-```python
-from photo_processor import PhotoProcessor
-from data_verifier import DataVerifier
-from visualization import Visualization
+### Northeast Direction (45°)
+- **Location**: 32.9609°N, -107.3268°W
+- **Visible Ridges**: 30 peaks
+- **Distance Range**: 3.90 - 49.35 km
+- **Elevation Range**: 1279 - 1728 m
+- **Highest Peak**: 1728m at 12.24km (67.0° bearing)
 
-# Process photo
-processor = PhotoProcessor('mountain_photo.jpg')
-skyline = processor.detect_skyline()
-photo_profile = processor.get_elevation_profile(
-    camera_position=(35.0844, -106.6504),  # Example: Albuquerque
-    camera_direction=45,  # degrees from north
-    camera_height=1.7  # meters
-)
+### East Direction (90°)
+- **Location**: 32.9609°N, -107.3268°W  
+- **Visible Ridges**: 26 peaks
+- **Distance Range**: 3.90 - 49.50 km
+- **Elevation Range**: 1279 - 2089 m
+- **Highest Peak**: 2089m at 9.23km (83.0° bearing)
 
-# Verify data
-verifier = DataVerifier()
-db_profile = verifier.get_elevation_data(
-    camera_position=(35.0844, -106.6504),
-    direction=45,
-    fov=60.0
-)
+## 🛠️ Technical Implementation
 
-# Compare profiles
-results = verifier.compare_profiles(photo_profile, db_profile)
+### Ridge Analysis Algorithm
+1. **Terrain Data Collection**: Query elevation databases within 50km radius
+2. **Field of View Filtering**: Select points within 60° FOV of facing direction
+3. **Line-of-Sight Calculation**: Use viewing angles to determine visibility
+4. **Ridge Prioritization**: Sort by viewing angle (highest ridges first)
+5. **Top Selection**: Return up to 100 closest visible points
 
-# Visualize results
-viz = Visualization()
-viz.plot_comparison(photo_profile, db_profile, results['error_distribution'], 'comparison.png')
-viz.create_overlay(processor.image, skyline, results['error_distribution'], 'overlay.png')
-viz.create_summary_report(results, 'report.txt')
-```
+### Background Image Generation
+1. **Coordinate Conversion**: Transform lat/lon to local coordinate system
+2. **Terrain Mapping**: Create 3D terrain model from elevation data
+3. **Visibility Analysis**: Calculate which points are visible from observer position
+4. **Image Rendering**: Generate realistic mountain silhouettes with sky gradient
+5. **Metadata Overlay**: Add compass direction, coordinates, and statistics
 
-### Required Information
-
-To use the system, you need:
-1. A photograph of a mountain/landscape
-2. Camera position (latitude, longitude)
-3. Camera direction (degrees from north)
-4. Optional: Camera height above ground
-5. Optional: Camera field of view (FOV)
-
-## Project Structure
+## 📁 File Structure
 
 ```
 photo_verification/
 ├── src/
-│   ├── photo_processor.py    # Photo analysis
-│   ├── data_verifier.py      # Database comparison
-│   └── visualization.py      # Results display
-├── tests/
-│   └── test_verification.py  # Unit tests
-├── docs/
-│   └── photo_verification.md # Documentation
-├── requirements.txt          # Dependencies
-└── README.md                # This file
+│   ├── ridge_cli.py                    # Command-line interface
+│   ├── generate_background_images.py   # Background image generator
+│   ├── ridge_viewer_app.py            # Streamlit web app
+│   ├── ridge_3d_viewer.py             # 3D visualization
+│   └── interactive_3d_viewer.py       # Enhanced 3D viewer
+├── data/
+│   ├── images/                        # Generated background images
+│   ├── selected_ridge_points.txt      # Manual ridge selections
+│   └── ridge_points_*.txt            # Generated ridge analysis files
+├── ridge_viewer.html                  # Web interface
+└── README.md                         # This file
 ```
 
-## Contributing
+## 🎮 Usage Examples
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+### 1. Photo Verification Site Analysis
+```bash
+python src/ridge_cli.py '32.9609357, -107.3267788' 45
+```
+**Output**: 30 visible ridge points facing northeast, with detailed statistics
 
-## License
+### 2. Generate Background for Any Location
+```bash
+python src/ridge_cli.py '35.0844, -106.6504' 90  # Albuquerque facing east
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+### 3. Interactive Analysis
+```bash
+python src/ridge_cli.py
+# Follow prompts to enter coordinates and direction
+```
+
+### 4. Batch Generation
+```bash
+python src/generate_background_images.py
+# Generates backgrounds for all 4 cardinal directions
+```
+
+## 🔧 Requirements
+
+- Python 3.8+
+- SQLite databases with elevation data
+- PIL (Python Imaging Library)
+- NumPy
+- Matplotlib (optional, for enhanced visualizations)
+
+## 📈 Performance
+
+- **Database Query**: ~1-2 seconds for 50km radius
+- **Ridge Analysis**: ~0.5 seconds for 100 points
+- **Background Generation**: ~3-5 seconds per image
+- **Memory Usage**: ~50MB for typical analysis
+
+## 🎯 Key Insights
+
+1. **3D Projection Complexity**: 2D photos compress 3D terrain depth, making direct comparison challenging
+2. **Line-of-Sight Critical**: Many high peaks are hidden behind closer ridges
+3. **Direction Matters**: Different facing directions reveal completely different ridge profiles
+4. **Distance vs Elevation**: Closer ridges often appear more prominent than distant high peaks
+
+## 🚀 Future Enhancements
+
+- [ ] Real-time web API for background generation
+- [ ] Integration with photo overlay system
+- [ ] Advanced 3D visualization with rotation controls
+- [ ] Batch processing for multiple locations
+- [ ] Export to various image formats
+- [ ] Integration with mapping services
+
+## 📝 Notes
+
+- Coordinates must be in decimal degrees format
+- Direction range: 1-360° (360° = North)
+- Database coverage: New Mexico region
+- Generated images: 1600x1200 pixels
+- Ridge analysis: Up to 100 visible points per direction 

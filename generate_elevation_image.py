@@ -406,3 +406,4 @@ def create_elevation_image(points, width=2000, height=2000):
 if __name__ == '__main__':
     points = get_elevation_data()
     create_elevation_image(points) 
+    

@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Database Statistics</title>
-    <style>
+  <style>
         body {
             margin: 0;
             padding: 20px;
@@ -124,7 +124,7 @@
             font-size: 12px;
             margin-top: 4px;
         }
-    </style>
+  </style>
 </head>
 <body>
     <div class="container">
@@ -134,10 +134,10 @@
         </div>
         <div id="stats-container">
             <div class="loading">Loading statistics...</div>
-        </div>
-    </div>
+  </div>
+  </div>
 
-    <script>
+  <script>
         async function loadStats() {
             const container = document.getElementById('stats-container');
             container.innerHTML = '<div class="loading">Loading statistics...</div>';
@@ -236,10 +236,10 @@
                                 } else if (stats.count >= 1000) {
                                     status = 'complete';
                                     statusText = 'Complete';
-                                } else {
+        } else {
                                     status = 'incomplete';
                                     statusText = 'Incomplete';
-                                }
+        }
 
                                 const pointCount = stats.count === 'Error' ? 'Error' : 
                                     (stats.count || 0).toLocaleString();
@@ -271,10 +271,10 @@
                     </div>
                 `;
             }
-        }
+    }
 
         // Load stats when page loads
-        loadStats();
-    </script>
+    loadStats();
+  </script>
 </body>
 </html> 
