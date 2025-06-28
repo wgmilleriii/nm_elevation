@@ -4,7 +4,7 @@ const VERSION = '3.2.0';
 class GPSLiveTracker {
     constructor() {
         // Enhanced logging for iPhone debugging
-        console.log('🚀 GPS Live Tracker v3.4.2 starting...');
+        console.log('🚀 GPS Live Tracker v3.4.3 starting...');
         console.log('📱 User Agent:', navigator.userAgent);
         console.log('🌐 Location:', window.location.href);
         console.log('⏰ Timestamp:', new Date().toISOString());
@@ -728,8 +728,8 @@ class GPSLiveTracker {
                         timestamp: new Date(position.timestamp).toLocaleTimeString()
                     });
 
-                    // Only use readings with good accuracy - more lenient for mobile
-                    const maxAccuracy = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 150 : 50;
+                    // Only use readings with good accuracy - more lenient for all devices
+                    const maxAccuracy = 150; // Increased for all devices - 94m is fine for elevation mapping
                     if (position.coords.accuracy > maxAccuracy) {
                         console.log(`Skipping low accuracy reading (${position.coords.accuracy}m, max: ${maxAccuracy}m)`);
                         this.updateAccuracyDisplay(position.coords.accuracy);
@@ -871,8 +871,8 @@ class GPSLiveTracker {
         // Update accuracy display
         this.updateAccuracyDisplay(accuracy);
 
-        // Accept lower accuracy for better tracking - more sensitive for mobile
-        const maxAccuracy = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 150 : 100;
+        // Accept lower accuracy for better tracking - good for elevation mapping
+        const maxAccuracy = 150; // Consistent threshold for all devices
         if (accuracy > maxAccuracy) {
             console.log(`Skipping low accuracy position: ${accuracy}m (max: ${maxAccuracy}m)`);
             return;
