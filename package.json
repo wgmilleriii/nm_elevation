@@ -13,8 +13,10 @@
     "test:ui": "jest --testEnvironment=jsdom --config=jest.ui.config.cjs"
   },
   "dependencies": {
+    "@serialport/parser-readline": "^13.0.0",
     "better-sqlite3": "^8.7.0",
     "express": "^5.1.0",
+    "serialport": "^13.0.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   },

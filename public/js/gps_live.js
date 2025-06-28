@@ -22,6 +22,7 @@ class GPSLiveTracker {
         this.maxSpeedHistory = 50; // Maximum number of speed points to show
         this.timeWindow = 5 * 60 * 1000; // 5 minutes in milliseconds
         this.isMapInitialized = false;
+        this.locationSource = 'unknown';
 
         // Initialize UI elements
         this.elements = {
@@ -38,8 +39,23 @@ class GPSLiveTracker {
             speedBar: document.getElementById('speed-bar'),
             timeAxis: document.querySelector('.time-axis'),
             jsVersion: document.getElementById('js-version'),
-            nodeVersion: document.getElementById('node-version')
+            nodeVersion: document.getElementById('node-version'),
+            locationSource: document.getElementById('location-source')
         };
+
+        // Initialize popup elements
+        this.popup = {
+            element: document.getElementById('version-popup'),
+            gpsStatus: document.getElementById('gps-status'),
+            refreshBtn: document.getElementById('refresh-gps-btn'),
+            closeBtn: document.getElementById('close-popup-btn')
+        };
+
+        // Add manual location control
+        this.addManualLocationControl();
+
+        // Setup popup event listeners
+        this.setupPopupHandlers();
 
         // Show version information
         this.showVersionInfo();
@@ -55,6 +71,23 @@ class GPSLiveTracker {
                 console.error('Failed to initialize user:', error);
                 alert('Failed to initialize tracking. Please try again.');
             });
+    }
+
+    setupPopupHandlers() {
+        // Close button
+        this.popup.closeBtn.addEventListener('click', () => {
+            this.popup.element.style.display = 'none';
+        });
+
+        // Refresh GPS button
+        this.popup.refreshBtn.addEventListener('click', () => {
+            this.restartGPS();
+        });
+
+        // Show popup on errors
+        window.addEventListener('gps-error', () => {
+            this.showPopup();
+        });
     }
 
     async showVersionInfo() {
@@ -74,6 +107,42 @@ class GPSLiveTracker {
             console.error('Failed to get Node.js version:', error);
             this.elements.nodeVersion.textContent = 'Error';
         }
+
+        // Update GPS status
+        this.updateGPSStatus('loading', 'Initializing...');
+    }
+
+    updateGPSStatus(state, message) {
+        const statusElement = this.popup.gpsStatus;
+        statusElement.textContent = message;
+        statusElement.className = state;
+
+        // Update recent changes if needed
+        const changesList = document.getElementById('recent-changes-list');
+        if (changesList && state === 'active') {
+            const changes = [
+                'GPS Active: ' + new Date().toLocaleTimeString(),
+                'Accuracy: ' + (this.lastAccuracy ? this.lastAccuracy.toFixed(1) + 'm' : 'Unknown'),
+                'Location Source: ' + this.locationSource
+            ];
+            changesList.innerHTML = changes.map(change => `<li>${change}</li>`).join('');
+        }
+    }
+
+    restartGPS() {
+        // Clear existing tracking
+        if (this.watchId) {
+            navigator.geolocation.clearWatch(this.watchId);
+        }
+
+        // Update status
+        this.updateGPSStatus('loading', 'Restarting GPS...');
+
+        // Restart tracking
+        this.startTracking().catch(error => {
+            console.error('Failed to restart GPS:', error);
+            this.updateGPSStatus('error', 'Failed to restart GPS');
+        });
     }
 
     getOrCreateDeviceId() {
@@ -249,105 +318,193 @@ class GPSLiveTracker {
         }
 
         try {
-            console.log('Requesting GPS permissions...');
-            // Request permission for high accuracy location
-            const result = await navigator.permissions.query({ name: 'geolocation' });
-            console.log('Permission status:', result.state);
+            // Check if we're on a secure context
+            const isSecureContext = window.isSecureContext;
+            const isLocalhost = window.location.hostname === 'localhost' || 
+                              window.location.hostname === '127.0.0.1' ||
+                              window.location.hostname.includes('192.168.');
             
-            if (result.state === 'denied') {
-                throw new Error('Location permission denied');
+            console.log('Security Context:', {
+                isSecure: isSecureContext,
+                isLocalhost: isLocalhost,
+                protocol: window.location.protocol,
+                hostname: window.location.hostname
+            });
+
+            if (!isSecureContext && !isLocalhost) {
+                throw new Error('Geolocation requires HTTPS or localhost. Please access this page via HTTPS or using localhost/IP address.');
             }
 
-            // Start GPS tracking with debug info
-            console.log('Starting GPS tracking...');
+            // Check if running on mobile
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            console.log('Device type:', isMobile ? 'Mobile' : 'Desktop');
+            console.log('User Agent:', navigator.userAgent);
+
+            // Try to get more accurate position first
+            const initialPosition = await this.getCurrentPosition();
+            console.log('Initial position:', initialPosition);
+
+            // Start continuous tracking
             this.watchId = navigator.geolocation.watchPosition(
                 position => {
-                    console.log('GPS Update received:', {
+                    console.log('GPS Update:', {
                         lat: position.coords.latitude,
                         lon: position.coords.longitude,
                         accuracy: position.coords.accuracy,
+                        altitude: position.coords.altitude,
+                        altitudeAccuracy: position.coords.altitudeAccuracy,
+                        heading: position.coords.heading,
+                        speed: position.coords.speed,
                         timestamp: new Date(position.timestamp).toLocaleTimeString()
                     });
+
+                    // Only use readings with good accuracy
+                    if (position.coords.accuracy > 30) {
+                        console.log(`Skipping low accuracy reading (${position.coords.accuracy}m)`);
+                        this.updateAccuracyDisplay(position.coords.accuracy);
+                        return;
+                    }
+
                     this.handlePosition(position);
                 },
                 error => {
-                    console.error('GPS Error:', {
-                        code: error.code,
-                        message: error.message,
-                        time: new Date().toLocaleTimeString()
-                    });
+                    console.error('GPS Error:', error);
+                    
+                    // Add specific handling for secure origin errors
+                    if (error.message.includes('Only secure origins are allowed')) {
+                        const currentUrl = window.location.href;
+                        const ipUrl = currentUrl.replace('localhost', '192.168.105.126');
+                        
+                        this.updateGPSStatus('error', `Please access via IP address: ${ipUrl}`);
+                        this.showPopup();
+                        
+                        // Update the recent changes list with helpful information
+                        const changesList = document.getElementById('recent-changes-list');
+                        if (changesList) {
+                            changesList.innerHTML = `
+                                <li>Error: Secure origin required</li>
+                                <li>Try accessing via: ${ipUrl}</li>
+                                <li>Or use direct IP address</li>
+                            `;
+                        }
+                    }
+                    
                     this.handleError(error);
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 30000,
+                    timeout: 5000,
                     maximumAge: 0
                 }
             );
 
-            console.log('GPS watch started with ID:', this.watchId);
-
         } catch (error) {
             console.error('Error starting tracking:', error);
-            alert('Failed to start tracking: ' + error.message);
+            this.updateGPSStatus('error', error.message);
+            this.showPopup();
         }
     }
 
-    async handlePosition(position) {
-        const { latitude, longitude, accuracy, heading } = position.coords;
+    getCurrentPosition() {
+        return new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+                position => resolve(position),
+                error => reject(error),
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        });
+    }
+
+    updateAccuracyDisplay(accuracy) {
+        const accElement = document.getElementById('acc');
+        const accIndicator = document.getElementById('acc-indicator');
+        
+        accElement.textContent = accuracy.toFixed(1);
+        
+        // Update accuracy indicator with more granular levels
+        let className = 'accuracy-indicator ';
+        if (accuracy <= 10) {
+            className += 'accuracy-high';
+            accElement.style.color = '#4aff4a';
+        } else if (accuracy <= 30) {
+            className += 'accuracy-medium';
+            accElement.style.color = '#ff9f4a';
+        } else if (accuracy <= 100) {
+            className += 'accuracy-low';
+            accElement.style.color = '#ff4a4a';
+        } else {
+            className += 'accuracy-very-low';
+            accElement.style.color = '#ff0000';
+        }
+        
+        accIndicator.className = className;
+    }
+
+    handlePosition(position) {
+        const { latitude, longitude, accuracy, altitude, altitudeAccuracy, heading, speed } = position.coords;
         const timestamp = position.timestamp;
 
-        // Only collect points at the specified interval
-        const lastPoint = this.trackPoints[this.trackPoints.length - 1];
-        if (lastPoint && (timestamp - lastPoint.timestamp) < this.updateInterval) {
+        // Update GPS status
+        if (accuracy <= 30) {
+            this.updateGPSStatus('active', 'GPS Active (High Accuracy)');
+        } else if (accuracy <= 100) {
+            this.updateGPSStatus('warning', 'GPS Active (Medium Accuracy)');
+        } else {
+            this.updateGPSStatus('error', 'GPS Active (Low Accuracy)');
+        }
+
+        // Log position quality metrics
+        console.log('Position Quality:', {
+            accuracy: `${accuracy}m`,
+            altitude: altitude ? `${altitude}m` : 'N/A',
+            altitudeAccuracy: altitudeAccuracy ? `${altitudeAccuracy}m` : 'N/A',
+            heading: heading ? `${heading}°` : 'N/A',
+            speed: speed ? `${(speed * 3.6).toFixed(1)} km/h` : 'N/A'
+        });
+
+        // Update accuracy display
+        this.updateAccuracyDisplay(accuracy);
+
+        // Only proceed if we have good accuracy
+        if (accuracy > 30) {
+            console.log('Skipping low accuracy position');
             return;
         }
 
-        try {
-            // Get elevation data
-            const elevation = await this.getElevation(latitude, longitude);
+        // Create new track point
+        const point = {
+            lat: latitude,
+            lon: longitude,
+            elevation: altitude || null,
+            accuracy,
+            heading: heading || this.lastHeading,
+            speed: speed || 0,
+            timestamp
+        };
 
-            // Create new track point
-            const point = {
-                lat: latitude,
-                lon: longitude,
-                elevation,
-                accuracy,
-                heading: heading || this.lastHeading,
-                timestamp
-            };
-
-            // Calculate speed if we have previous points
-            if (lastPoint) {
-                const speed = this.calculateSpeed(lastPoint, point);
-                this.updateSpeedDisplay(speed);
-                point.speed = speed;
-            } else {
-                this.updateSpeedDisplay(0);
-                point.speed = 0;
-            }
-
-            // Add point to track
-            this.trackPoints.push(point);
-            if (this.trackPoints.length > this.maxPoints) {
-                this.trackPoints.shift();
-            }
-
-            // Update UI
-            this.updateUI(point);
-            
-            // Update map
-            this.updateMap(point);
-            
-            // Update elevation profile
-            this.updateElevationProfile();
-
-            // Save point to database with user info
-            await this.savePoint(point);
-
-        } catch (error) {
-            console.error('Error handling position:', error);
+        // Add point to track
+        this.trackPoints.push(point);
+        if (this.trackPoints.length > this.maxPoints) {
+            this.trackPoints.shift();
         }
+
+        // Update UI
+        this.updateUI(point);
+        
+        // Update map
+        this.updateMap(point);
+        
+        // Update elevation profile
+        this.updateElevationProfile();
+
+        // Save point to database
+        this.savePoint(point).catch(error => {
+            console.error('Error saving point:', error);
+        });
     }
 
     async getElevation(lat, lon) {
@@ -415,14 +572,15 @@ class GPSLiveTracker {
         this.elements.elev.textContent = point.elevation ? point.elevation.toFixed(1) : '--';
         this.elements.acc.textContent = point.accuracy.toFixed(1);
 
-        // Update accuracy indicator
+        // Update accuracy indicator with source information
+        let accuracyClass = 'accuracy-low';
         if (point.accuracy <= 10) {
-            this.elements.accIndicator.className = 'accuracy-indicator accuracy-high';
-        } else if (point.accuracy <= 30) {
-            this.elements.accIndicator.className = 'accuracy-indicator accuracy-medium';
-        } else {
-            this.elements.accIndicator.className = 'accuracy-indicator accuracy-low';
+            accuracyClass = 'accuracy-high';
+        } else if (point.accuracy <= 100) {
+            accuracyClass = 'accuracy-medium';
         }
+
+        this.elements.accIndicator.className = `accuracy-indicator ${accuracyClass} source-${this.locationSource}`;
     }
 
     updateElevationProfile() {
@@ -555,21 +713,31 @@ class GPSLiveTracker {
 
     handleError(error) {
         console.error('GPS Error:', error);
+        
         let errorMessage = '';
         switch(error.code) {
             case error.PERMISSION_DENIED:
-                errorMessage = 'Location access was denied. Please check your browser settings and ensure location access is enabled. Then refresh the page.';
+                errorMessage = 'Location access denied. Please check your browser settings and ensure location access is enabled.';
                 break;
             case error.POSITION_UNAVAILABLE:
-                errorMessage = 'Location information is currently unavailable. Please check if GPS is enabled on your device.';
+                errorMessage = 'Location information unavailable. Please check if GPS is enabled.';
                 break;
             case error.TIMEOUT:
-                errorMessage = 'Location request timed out. The app will automatically retry. Please ensure you have a clear view of the sky.';
+                errorMessage = 'Location request timed out. Please try again.';
                 break;
             default:
-                errorMessage = 'An unknown error occurred while getting location. Please check your device settings.';
+                if (error.message.includes('Only secure origins are allowed')) {
+                    errorMessage = `Please access this page using your IP address instead of 'localhost'`;
+                } else {
+                    errorMessage = 'An unknown error occurred while getting location.';
+                }
                 break;
         }
+
+        // Update status and show popup
+        this.updateGPSStatus('error', errorMessage);
+        this.showPopup();
+
         alert(errorMessage);
     }
 
@@ -840,6 +1008,55 @@ Speed averaging:
 
         // Update time axis
         this.updateTimeAxis();
+    }
+
+    addManualLocationControl() {
+        const controlDiv = document.createElement('div');
+        controlDiv.className = 'manual-location-control';
+        controlDiv.innerHTML = `
+            <div class="location-info">
+                <div>Source: <span id="location-source">Unknown</span></div>
+                <button id="set-location-btn">Set Location</button>
+            </div>
+        `;
+
+        document.body.appendChild(controlDiv);
+
+        const setLocationBtn = document.getElementById('set-location-btn');
+        setLocationBtn.addEventListener('click', () => {
+            const lat = prompt('Enter latitude (e.g., 35.0844 for Albuquerque):', '35.0844');
+            const lon = prompt('Enter longitude (e.g., -106.6504 for Albuquerque):', '-106.6504');
+            
+            if (lat && lon) {
+                const position = {
+                    coords: {
+                        latitude: parseFloat(lat),
+                        longitude: parseFloat(lon),
+                        accuracy: 10,
+                        altitude: null,
+                        altitudeAccuracy: null,
+                        heading: null,
+                        speed: 0
+                    },
+                    timestamp: Date.now()
+                };
+                this.locationSource = 'manual';
+                this.updateLocationSource();
+                this.handlePosition(position);
+            }
+        });
+    }
+
+    updateLocationSource() {
+        const sourceElement = document.getElementById('location-source');
+        if (sourceElement) {
+            sourceElement.textContent = this.locationSource;
+            sourceElement.className = `source-${this.locationSource}`;
+        }
+    }
+
+    showPopup() {
+        this.popup.element.style.display = 'block';
     }
 }
 

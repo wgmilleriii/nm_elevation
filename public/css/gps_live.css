@@ -270,39 +270,310 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.9);
-    padding: 20px;
+    background: rgba(0, 0, 0, 0.95);
+    padding: 24px;
     border-radius: 12px;
     border: 2px solid rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(10px);
     z-index: 2000;
-    text-align: center;
-    min-width: 300px;
+    color: white;
+    width: 90%;
+    max-width: 400px;
+    max-height: 90vh;
+    overflow-y: auto;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .version-popup h2 {
-    margin-bottom: 15px;
+    margin: 0 0 20px;
     color: #4a9eff;
+    font-size: 24px;
+    text-align: center;
 }
 
-.version-popup p {
+.version-popup h3 {
+    color: #ff9f4a;
+    margin: 20px 0 10px;
+    font-size: 18px;
+}
+
+.version-info {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.version-info p {
     margin: 8px 0;
-    opacity: 0.8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.version-popup button {
-    margin-top: 15px;
-    padding: 8px 20px;
-    background: #4a9eff;
+.version-info span {
+    color: #4aff4a;
+    font-family: monospace;
+}
+
+.recent-changes ul,
+.gps-tips ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.recent-changes li,
+.gps-tips li {
+    margin: 8px 0;
+    padding-left: 20px;
+    position: relative;
+}
+
+.recent-changes li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: #4aff4a;
+}
+
+.gps-tips li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: #ff9f4a;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+
+.button-group button {
+    padding: 8px 16px;
     border: none;
     border-radius: 6px;
-    color: white;
     cursor: pointer;
+    font-size: 14px;
     transition: all 0.3s ease;
 }
 
-.version-popup button:hover {
-    background: #2b8aff;
+#refresh-gps-btn {
+    background: #4a9eff;
+    color: white;
+}
+
+#close-popup-btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+#refresh-gps-btn:hover {
+    background: #2b7fdb;
     transform: translateY(-1px);
+}
+
+#close-popup-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+/* Mobile optimizations for popup */
+@media (max-width: 768px) {
+    .version-popup {
+        padding: 16px;
+        width: 95%;
+    }
+
+    .version-popup h2 {
+        font-size: 20px;
+        margin-bottom: 15px;
+    }
+
+    .version-popup h3 {
+        font-size: 16px;
+    }
+
+    .version-info {
+        padding: 10px;
+    }
+
+    .button-group button {
+        padding: 10px 20px;
+        font-size: 16px;
+    }
+}
+
+/* Add loading animation for status */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+#gps-status.loading {
+    animation: pulse 1.5s infinite;
+}
+
+/* Status colors */
+#gps-status.active { color: #4aff4a; }
+#gps-status.warning { color: #ff9f4a; }
+#gps-status.error { color: #ff4a4a; }
+
+.manual-location-control {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    padding: 12px;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    font-size: 14px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.location-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#set-location-btn {
+    background: #4a9eff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+}
+
+#set-location-btn:hover {
+    background: #2b7fdb;
+    transform: translateY(-1px);
+}
+
+#location-source {
+    font-weight: bold;
+}
+
+.source-gps { color: #4aff4a; }
+.source-wifi { color: #ff9f4a; }
+.source-ip { color: #ff4a4a; }
+.source-manual { color: #9f4aff; }
+.source-coarse { color: #ff4a4a; }
+.source-unknown { color: #ffffff77; }
+
+.accuracy-indicator.source-gps { background: #4aff4a; }
+.accuracy-indicator.source-wifi { background: #ff9f4a; }
+.accuracy-indicator.source-ip { background: #ff4a4a; }
+.accuracy-indicator.source-manual { background: #9f4aff; }
+.accuracy-indicator.source-coarse { background: #ff4a4a; }
+.accuracy-indicator.source-unknown { background: #ffffff77; }
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    .info-panel {
+        padding: 8px;
+        font-size: 12px;
+    }
+
+    .compass {
+        top: 8px;
+        left: 8px;
+    }
+
+    .coordinates {
+        top: 8px;
+        right: 8px;
+        min-width: 140px;
+    }
+
+    #map {
+        height: 60vh;
+    }
+
+    #svg-container {
+        height: 40vh;
+    }
+
+    .manual-location-control {
+        top: auto;
+        bottom: 12px;
+        transform: none;
+        left: 12px;
+        right: 12px;
+        width: auto;
+    }
+
+    .accuracy-indicator {
+        width: 6px;
+        height: 6px;
+    }
+
+    .speed-graph {
+        width: 30px;
+    }
+
+    .graph-label {
+        font-size: 10px;
+    }
+
+    .time-label {
+        font-size: 9px;
+    }
+
+    /* Improve touch targets */
+    #set-location-btn {
+        padding: 8px 16px;
+        font-size: 14px;
+    }
+
+    /* Add visual feedback for touch */
+    .info-panel div:active {
+        opacity: 0.7;
+    }
+
+    /* Improve visibility */
+    .accuracy-indicator.accuracy-high { box-shadow: 0 0 4px #4aff4a; }
+    .accuracy-indicator.accuracy-medium { box-shadow: 0 0 4px #ff9f4a; }
+    .accuracy-indicator.accuracy-low { box-shadow: 0 0 4px #ff4a4a; }
+    .accuracy-indicator.accuracy-very-low { box-shadow: 0 0 4px #ff0000; }
+}
+
+/* Additional mobile improvements */
+@media (max-width: 480px) {
+    .coordinates div {
+        margin: 4px 0;
+    }
+
+    .speed-unit {
+        font-size: 10px;
+    }
+
+    .graph-container {
+        padding: 8px 0;
+    }
+}
+
+/* Prevent text selection on mobile */
+* {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+
+/* Allow text selection in specific elements */
+.coordinates span,
+.time-label {
+    user-select: text;
 } 

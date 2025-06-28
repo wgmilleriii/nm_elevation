@@ -10,9 +10,32 @@
 <body>
     <div id="version-popup" class="version-popup">
         <h2>GPS Live Tracker</h2>
-        <p>Version: <span id="js-version">Loading...</span></p>
-        <p>Node.js: <span id="node-version">Loading...</span></p>
-        <button onclick="this.parentElement.style.display='none'">OK</button>
+        <div class="version-info">
+            <p>Version: <span id="js-version">Loading...</span></p>
+            <p>Node.js: <span id="node-version">Loading...</span></p>
+            <p>GPS Status: <span id="gps-status">Checking...</span></p>
+        </div>
+        <div class="recent-changes">
+            <h3>Recent Updates</h3>
+            <ul id="recent-changes-list">
+                <li>Enhanced GPS accuracy filtering</li>
+                <li>Added mobile-optimized interface</li>
+                <li>Improved location tracking</li>
+                <li>Real-time elevation updates</li>
+            </ul>
+        </div>
+        <div class="gps-tips">
+            <h3>GPS Tips</h3>
+            <ul>
+                <li>Move to an area with clear sky view</li>
+                <li>Allow location permissions</li>
+                <li>Wait 10-15s for GPS to stabilize</li>
+            </ul>
+        </div>
+        <div class="button-group">
+            <button id="refresh-gps-btn">Refresh GPS</button>
+            <button id="close-popup-btn">Close</button>
+        </div>
     </div>
 
     <div class="compass info-panel">

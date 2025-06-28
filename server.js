@@ -1,20 +1,104 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import https from 'https';
+import http from 'http';
 import { spawn } from 'child_process';
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import { calculateDistance, calculatePointDistance } from './utils/distance.js';
+import SerialPort from 'serialport';
+import { ReadlineParser } from '@serialport/parser-readline';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = process.env.PORT || 3001;
+const httpPort = process.env.PORT || 3001;
+const httpsPort = process.env.HTTPS_PORT || 3443;
 
 // Middleware
 app.use(express.static('public'));
 app.use(express.json());
+
+// Redirect HTTP to HTTPS
+app.use((req, res, next) => {
+    if (!req.secure && req.get('x-forwarded-proto') !== 'https' && process.env.NODE_ENV !== 'development') {
+        return res.redirect('https://' + req.get('host') + req.url);
+    }
+    next();
+});
+
+// Create HTTPS credentials
+const certPath = path.join(__dirname, 'certs');
+let httpsOptions = null;
+
+try {
+    httpsOptions = {
+        key: fs.readFileSync(path.join(certPath, 'localhost.key')),
+        cert: fs.readFileSync(path.join(certPath, 'localhost.crt'))
+    };
+} catch (error) {
+    console.log('No SSL certificates found. Will generate self-signed certificates...');
+    
+    // Generate self-signed certificate using OpenSSL
+    const openssl = spawn('openssl', [
+        'req',
+        '-x509',
+        '-newkey', 'rsa:2048',
+        '-keyout', path.join(certPath, 'localhost.key'),
+        '-out', path.join(certPath, 'localhost.crt'),
+        '-days', '365',
+        '-nodes',
+        '-subj', '/CN=localhost'
+    ]);
+
+    openssl.stdout.on('data', (data) => {
+        console.log(`OpenSSL output: ${data}`);
+    });
+
+    openssl.stderr.on('data', (data) => {
+        console.error(`OpenSSL error: ${data}`);
+    });
+
+    openssl.on('close', (code) => {
+        if (code === 0) {
+            console.log('SSL certificates generated successfully');
+            httpsOptions = {
+                key: fs.readFileSync(path.join(certPath, 'localhost.key')),
+                cert: fs.readFileSync(path.join(certPath, 'localhost.crt'))
+            };
+            // Start HTTPS server after generating certificates
+            const httpsServer = https.createServer(httpsOptions, app);
+            httpsServer.listen(httpsPort, () => {
+                console.log(`HTTPS Server running at https://localhost:${httpsPort}`);
+            });
+        } else {
+            console.error('Failed to generate SSL certificates');
+        }
+    });
+}
+
+// Start HTTP server
+const httpServer = http.createServer(app);
+httpServer.listen(httpPort, '0.0.0.0', () => {
+    console.log(`\nServer Configuration:`);
+    console.log(`- HTTP Port: ${httpPort}`);
+    console.log(`- HTTPS Port: ${httpsPort}`);
+    console.log('\nAccess the tracking interface at:');
+    console.log(`http://localhost:${httpPort}/gps_live.html`);
+    console.log(`https://localhost:${httpsPort}/gps_live.html`);
+    console.log(`http://192.168.105.126:${httpPort}/gps_live.html`);
+    console.log(`https://192.168.105.126:${httpsPort}/gps_live.html`);
+});
+
+// Start HTTPS server if certificates exist
+if (httpsOptions) {
+    const httpsServer = https.createServer(httpsOptions, app);
+    httpsServer.listen(httpsPort, '0.0.0.0', () => {
+        console.log(`HTTPS Server running at https://localhost:${httpsPort}`);
+    });
+}
 
 // Ensure logs directory exists
 const logsDir = path.join(__dirname, 'logs');
@@ -1235,9 +1319,151 @@ app.get('/api/version', (req, res) => {
     });
 });
 
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-    console.log('Current directory:', process.cwd());
-    console.log('Grid databases directory:', path.join(__dirname, 'grid_databases'));
-    console.log('\nGrid databases directory exists:', fs.existsSync(path.join(__dirname, 'grid_databases')));
+// GPS tracking state
+let nativeGPSActive = false;
+let lastKnownPosition = null;
+let gpsQuality = 'none';
+let activeGPSSource = 'none';
+
+// Add GPS endpoints
+app.get('/api/gps/status', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.json({
+        nativeGPSActive: false,  // Default to false since we're focusing on browser GPS
+        lastKnownPosition: null,
+        gpsQuality: 'browser',
+        activeGPSSource: 'browser',
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.post('/api/gps/source', (req, res) => {
+    const { source } = req.body;
+    activeGPSSource = source;
+    res.json({ success: true, activeGPSSource });
+});
+
+// Native GPS handling
+async function initializeNativeGPS() {
+    try {
+        const ports = await SerialPort.list();
+        console.log('\nAvailable Serial Ports:');
+        ports.forEach(port => {
+            console.log(`- ${port.path}: ${port.manufacturer || 'Unknown manufacturer'}`);
+        });
+
+        // Try to identify GPS device
+        const gpsPort = ports.find(port => 
+            port.manufacturer?.toLowerCase().includes('u-blox') ||
+            port.manufacturer?.toLowerCase().includes('garmin') ||
+            port.manufacturer?.toLowerCase().includes('gps')
+        );
+
+        if (gpsPort) {
+            console.log(`\nFound potential GPS device: ${gpsPort.path}`);
+            const port = new SerialPort({
+                path: gpsPort.path,
+                baudRate: 9600
+            });
+
+            const parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+
+            port.on('open', () => {
+                console.log('Native GPS connection established');
+                nativeGPSActive = true;
+            });
+
+            parser.on('data', (data) => {
+                if (data.startsWith('$GPGGA')) {
+                    const position = parseGPGGA(data);
+                    if (position) {
+                        lastKnownPosition = position;
+                        gpsQuality = getGPSQualityDescription(position.quality);
+                        activeGPSSource = 'native';
+                        console.log('\nNative GPS Update:', position);
+                    }
+                }
+            });
+
+            port.on('error', (err) => {
+                console.error('Native GPS error:', err.message);
+                nativeGPSActive = false;
+            });
+
+            port.on('close', () => {
+                console.log('Native GPS connection closed');
+                nativeGPSActive = false;
+            });
+        } else {
+            console.log('\nNo native GPS device found. Will use browser GPS if available.');
+        }
+    } catch (error) {
+        console.error('Failed to initialize native GPS:', error);
+    }
+}
+
+function parseGPGGA(data) {
+    const parts = data.split(',');
+    if (parts.length < 14) return null;
+
+    const lat = convertGPSCoord(parts[2], parts[3]);
+    const lon = convertGPSCoord(parts[4], parts[5]);
+    
+    return {
+        timestamp: new Date(),
+        latitude: lat,
+        longitude: lon,
+        quality: parseInt(parts[6]),
+        satellites: parseInt(parts[7]),
+        hdop: parseFloat(parts[8]),
+        altitude: parseFloat(parts[9]),
+        accuracy: parseFloat(parts[8]) * 5 // Approximate accuracy from HDOP
+    };
+}
+
+function convertGPSCoord(coord, dir) {
+    if (!coord) return null;
+    const degrees = parseInt(coord.substring(0, 2));
+    const minutes = parseFloat(coord.substring(2));
+    let decimal = degrees + (minutes / 60);
+    if (dir === 'S' || dir === 'W') decimal *= -1;
+    return decimal;
+}
+
+function getGPSQualityDescription(quality) {
+    const qualities = {
+        0: 'No fix',
+        1: 'GPS fix',
+        2: 'DGPS fix',
+        3: 'PPS fix',
+        4: 'Real Time Kinematic',
+        5: 'Float RTK',
+        6: 'Estimated',
+        7: 'Manual input',
+        8: 'Simulation'
+    };
+    return qualities[quality] || 'Unknown';
+}
+
+// Initialize native GPS on startup
+initializeNativeGPS();
+
+// Log server status
+console.log('\nServer Configuration:');
+console.log(`- HTTP Port: ${httpPort}`);
+console.log(`- HTTPS Port: ${httpsPort}`);
+console.log('- GPS Sources: Browser Geolocation API');
+console.log('\nAccess the tracking interface at:');
+console.log(`http://localhost:${httpPort}/gps_live.html`);
+console.log(`https://localhost:${httpsPort}/gps_live.html`);
+console.log(`http://192.168.105.126:${httpPort}/gps_live.html`);
+console.log(`https://192.168.105.126:${httpsPort}/gps_live.html`);
+
+// Add error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Server error:', err);
+    res.status(500).json({
+        error: 'Internal server error',
+        message: err.message
+    });
 }); 
