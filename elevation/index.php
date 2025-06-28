@@ -1025,7 +1025,7 @@ function haversineDistance($lat1, $lon1, $lat2, $lon2) {
 
 // Helper functions
 function generateUserId($deviceId) {
-    return 'user_' . md5($deviceId . '_' . time());
+    return 'user_' . md5($deviceId);
 }
 
 function generateSessionId($userId) {
