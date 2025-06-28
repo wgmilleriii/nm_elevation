@@ -4,7 +4,7 @@ const VERSION = '3.2.0';
 class GPSLiveTracker {
     constructor() {
         // Enhanced logging for iPhone debugging
-        console.log('🚀 GPS Live Tracker v3.4.5 starting...');
+        console.log('🚀 GPS Live Tracker v3.4.6 starting...');
         console.log('📱 User Agent:', navigator.userAgent);
         console.log('🌐 Location:', window.location.href);
         console.log('⏰ Timestamp:', new Date().toISOString());
@@ -394,10 +394,10 @@ class GPSLiveTracker {
 
         const sessionData = await sessionResponse.json();
         this.sessionId = sessionData.sessionId;
-        console.log('✅ New session created:', this.sessionId);
+        this.sessionNumber = sessionData.globalNumber; // Use the global session number from server
+        console.log('✅ New session created:', this.sessionId, 'Global #:', this.sessionNumber);
         
-        // Update session number
-        await this.updateSessionNumber();
+        // Update UI with correct global session number
         this.updateUserDisplay();
         
         // Clear current tracking data
@@ -482,12 +482,15 @@ class GPSLiveTracker {
 
                 const sessionData = await sessionResponse.json();
                 this.sessionId = sessionData.sessionId;
-                console.log('✅ New session created:', this.sessionId);
+                this.sessionNumber = sessionData.globalNumber; // Use the global session number from server
+                console.log('✅ New session created:', this.sessionId, 'Global #:', this.sessionNumber);
             }
             
-            // Get session number by counting user's sessions
-            console.log('📊 Updating session number...');
-            await this.updateSessionNumber();
+            // If resuming existing session, get its global number
+            if (existingSession && existingSession.globalNumber) {
+                this.sessionNumber = existingSession.globalNumber;
+                console.log('♻️ Resumed session global number:', this.sessionNumber);
+            }
             
             console.log('🎯 Session ready:', this.sessionId, 'Session #:', this.sessionNumber);
 
