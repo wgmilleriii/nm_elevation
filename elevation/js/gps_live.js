@@ -4,7 +4,7 @@ const VERSION = '3.2.0';
 class GPSLiveTracker {
     constructor() {
         // Enhanced logging for iPhone debugging
-        console.log('🚀 GPS Live Tracker v3.4.4 starting...');
+        console.log('🚀 GPS Live Tracker v3.4.5 starting...');
         console.log('📱 User Agent:', navigator.userAgent);
         console.log('🌐 Location:', window.location.href);
         console.log('⏰ Timestamp:', new Date().toISOString());
@@ -1096,14 +1096,24 @@ class GPSLiveTracker {
         const maxElev = Math.max(...elevations);
         const elevRange = maxElev - minElev;
 
-        // Create scales
-        const xScale = (i) => padding + (i * (width - 2 * padding) / (this.trackPoints.length - 1));
-        const yScale = (elev) => height - padding - ((elev - minElev) / elevRange) * (height - 2 * padding);
+        // Create scales with safety checks
+        const xScale = (i) => padding + (i * (width - 2 * padding) / Math.max(this.trackPoints.length - 1, 1));
+        const yScale = (elev) => {
+            if (elevRange === 0 || isNaN(elev) || elev === null || elev === undefined) {
+                return height - padding; // Flat line if no valid elevation data
+            }
+            return height - padding - ((elev - minElev) / elevRange) * (height - 2 * padding);
+        };
 
-        // Create path data
-        let pathData = `M ${xScale(0)} ${yScale(this.trackPoints[0].elevation)}`;
+        // Create path data with safety checks
+        const firstPoint = this.trackPoints[0];
+        if (!firstPoint || !firstPoint.elevation) {
+            return; // Exit if no valid first point
+        }
+        
+        let pathData = `M ${xScale(0)} ${yScale(firstPoint.elevation)}`;
         this.trackPoints.forEach((point, i) => {
-            if (i > 0) {
+            if (i > 0 && point && point.elevation !== null && point.elevation !== undefined) {
                 pathData += ` L ${xScale(i)} ${yScale(point.elevation)}`;
             }
         });

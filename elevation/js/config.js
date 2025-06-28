@@ -5,7 +5,7 @@ const PAISANO_LAT = 35.09993547269065;
 const PAISANO_LON = -106.51323662365995;
 
 // Version
-const VERSION = '3.4.4';
+const VERSION = '3.4.5';
 
 // Google Maps API key
 const GOOGLE_MAPS_API_KEY = 'AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8';
