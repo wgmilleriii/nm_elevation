@@ -141,4 +141,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log* 
 
-mountains.db
+mountains.db# Exclude large database files from git
+grid_databases/mountains_31_-109.db
+grid_databases/mountains_32_-109.db
+grid_databases/mountains_33_-109.db
+grid_databases/mountains_34_-109.db
+grid_databases/mountains_35_-109.db
+grid_databases/mountains_36_-109.db

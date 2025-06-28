@@ -120,6 +120,24 @@ switch ($path) {
         }
         break;
         
+    case '/api/logs':
+        if ($method === 'GET') {
+            handleGetLogs();
+        }
+        break;
+        
+    case '/api/checkpoint':
+        if ($method === 'POST') {
+            handleCheckpoint();
+        }
+        break;
+        
+    case '/api/users':
+        if ($method === 'GET') {
+            handleListUsers();
+        }
+        break;
+        
     default:
         http_response_code(404);
         echo json_encode(['error' => 'Endpoint not found']);
@@ -830,13 +848,161 @@ function haversineDistance($lat1, $lon1, $lat2, $lon2) {
     return $earthRadius * $c;
 }
 
+function handleListUsers() {
+    $users = [];
+    $userFiles = glob($GLOBALS['USERS_DIR'] . '/user_*.json');
+    
+    foreach ($userFiles as $file) {
+        $userData = json_decode(file_get_contents($file), true);
+        if ($userData) {
+            $totalPoints = 0;
+            $sessionCount = count($userData['sessions'] ?? []);
+            
+            // Count total points across all sessions
+            foreach ($userData['sessions'] ?? [] as $session) {
+                $totalPoints += count($session['points'] ?? []);
+            }
+            
+            $users[] = [
+                'userId' => $userData['userId'],
+                'deviceId' => $userData['deviceId'] ?? null,
+                'createdAt' => $userData['createdAt'] ?? null,
+                'lastActivity' => $userData['lastActivity'] ?? null,
+                'sessionCount' => $sessionCount,
+                'totalPoints' => $totalPoints
+            ];
+        }
+    }
+    
+    // Sort by total points descending
+    usort($users, function($a, $b) {
+        return $b['totalPoints'] - $a['totalPoints'];
+    });
+    
+    echo json_encode([
+        'users' => $users,
+        'totalUsers' => count($users),
+        'timestamp' => date('c')
+    ]);
+}
+
+function handleCheckpoint() {
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    // Validate required fields
+    $required = ['name', 'timestamp', 'latitude', 'longitude', 'userId', 'sessionId'];
+    foreach ($required as $field) {
+        if (!isset($input[$field])) {
+            http_response_code(400);
+            echo json_encode(['error' => "Field '$field' is required"]);
+            return;
+        }
+    }
+    
+    $userId = $input['userId'];
+    $sessionId = $input['sessionId'];
+    
+    // Load user data
+    $userFile = getUserFile($userId);
+    if (!file_exists($userFile)) {
+        http_response_code(404);
+        echo json_encode(['error' => 'User not found']);
+        return;
+    }
+    
+    $userData = json_decode(file_get_contents($userFile), true);
+    
+    // Find the session
+    $sessionIndex = -1;
+    foreach ($userData['sessions'] as $index => $session) {
+        if ($session['sessionId'] === $sessionId) {
+            $sessionIndex = $index;
+            break;
+        }
+    }
+    
+    if ($sessionIndex === -1) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Session not found']);
+        return;
+    }
+    
+    // Create checkpoint object
+    $checkpoint = [
+        'id' => uniqid('checkpoint_'),
+        'name' => $input['name'],
+        'description' => $input['description'] ?? '',
+        'timestamp' => $input['timestamp'],
+        'latitude' => (float)$input['latitude'],
+        'longitude' => (float)$input['longitude'],
+        'elevation' => isset($input['elevation']) ? (float)$input['elevation'] : null,
+        'accuracy' => isset($input['accuracy']) ? (float)$input['accuracy'] : null,
+        'speed' => isset($input['speed']) ? (float)$input['speed'] : null,
+        'heading' => isset($input['heading']) ? (float)$input['heading'] : null,
+        'deviceId' => $input['deviceId'] ?? null,
+        'createdAt' => date('c')
+    ];
+    
+    // Add checkpoint to session
+    if (!isset($userData['sessions'][$sessionIndex]['checkpoints'])) {
+        $userData['sessions'][$sessionIndex]['checkpoints'] = [];
+    }
+    $userData['sessions'][$sessionIndex]['checkpoints'][] = $checkpoint;
+    
+    // Update user's last activity
+    $userData['lastActivity'] = date('c');
+    
+    // Save updated user data
+    file_put_contents($userFile, json_encode($userData, JSON_PRETTY_PRINT));
+    
+    // Log the checkpoint creation
+    logGPS($userId, $sessionId, 'checkpoint_created', [
+        'checkpointId' => $checkpoint['id'],
+        'name' => $checkpoint['name'],
+        'location' => $checkpoint['latitude'] . ',' . $checkpoint['longitude']
+    ]);
+    
+    echo json_encode([
+        'success' => true,
+        'checkpoint' => $checkpoint,
+        'timestamp' => date('c')
+    ]);
+}
+
 // Helper functions
 function generateUserId($deviceId) {
-    return 'user_' . md5($deviceId . '_' . time());
+    return 'user_' . md5($deviceId);
 }
 
 function generateSessionId($userId) {
-    return 'session_' . $userId . '_' . time();
+    // Get global session counter
+    $globalSessionNumber = getNextGlobalSessionNumber();
+    return 'session_' . $globalSessionNumber . '_' . $userId . '_' . time();
+}
+
+function getNextGlobalSessionNumber() {
+    $counterFile = $GLOBALS['DATA_DIR'] . '/global_session_counter.json';
+    
+    // Initialize counter file if it doesn't exist
+    if (!file_exists($counterFile)) {
+        $counterData = ['lastSessionNumber' => 0];
+        file_put_contents($counterFile, json_encode($counterData, JSON_PRETTY_PRINT));
+    }
+    
+    // Read current counter
+    $counterData = json_decode(file_get_contents($counterFile), true);
+    if (!$counterData || !isset($counterData['lastSessionNumber'])) {
+        $counterData = ['lastSessionNumber' => 0];
+    }
+    
+    // Increment counter
+    $counterData['lastSessionNumber']++;
+    $counterData['lastUpdated'] = date('c');
+    
+    // Save updated counter
+    file_put_contents($counterFile, json_encode($counterData, JSON_PRETTY_PRINT));
+    
+    return $counterData['lastSessionNumber'];
 }
 
 function generatePointId($userId, $sessionId) {
@@ -906,6 +1072,51 @@ function updateElevationInUserFiles($lat, $lon, $elevation, $source) {
     return $updated;
 }
 
+function handleGetLogs() {
+    $type = $_GET['type'] ?? 'requests';
+    $date = $_GET['date'] ?? date('Y-m-d');
+    $lines = min($_GET['lines'] ?? 100, 1000);
+    
+    $logFile = '';
+    switch ($type) {
+        case 'requests':
+            $logFile = $GLOBALS['LOGS_DIR'] . '/requests_' . $date . '.log';
+            break;
+        case 'errors':
+            $logFile = $GLOBALS['LOGS_DIR'] . '/errors_' . $date . '.log';
+            break;
+        case 'gps':
+            $logFile = $GLOBALS['LOGS_DIR'] . '/gps_' . $date . '.log';
+            break;
+        default:
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid log type. Use: requests, errors, gps']);
+            return;
+    }
+    
+    if (!file_exists($logFile)) {
+        echo json_encode([
+            'logs' => [],
+            'message' => 'No logs found for ' . $date,
+            'file' => basename($logFile)
+        ]);
+        return;
+    }
+    
+    $content = file_get_contents($logFile);
+    $logLines = array_filter(explode("\n", $content));
+    $recentLogs = array_slice($logLines, -$lines);
+    
+    echo json_encode([
+        'logs' => $recentLogs,
+        'total_lines' => count($logLines),
+        'showing_lines' => count($recentLogs),
+        'file' => basename($logFile),
+        'date' => $date,
+        'type' => $type
+    ]);
+}
+
 function logRequest($method, $path, $body) {
     $logFile = $GLOBALS['LOGS_DIR'] . '/requests_' . date('Y-m-d') . '.log';
     $timestamp = date('c');
@@ -914,6 +1125,30 @@ function logRequest($method, $path, $body) {
         $logEntry .= "Body: $body\n";
     }
     $logEntry .= "---\n";
+    file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
+}
+
+function logError($message, $context = []) {
+    $logFile = $GLOBALS['LOGS_DIR'] . '/errors_' . date('Y-m-d') . '.log';
+    $timestamp = date('c');
+    $logEntry = "[$timestamp] ERROR: $message\n";
+    if (!empty($context)) {
+        $logEntry .= "Context: " . json_encode($context) . "\n";
+    }
+    $logEntry .= "---\n";
+    
+    file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
+}
+
+function logGPS($userId, $sessionId, $action, $data = []) {
+    $logFile = $GLOBALS['LOGS_DIR'] . '/gps_' . date('Y-m-d') . '.log';
+    $timestamp = date('c');
+    $logEntry = "[$timestamp] GPS: $action - User: $userId, Session: $sessionId\n";
+    if (!empty($data)) {
+        $logEntry .= "Data: " . json_encode($data) . "\n";
+    }
+    $logEntry .= "---\n";
+    
     file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
 }
 ?> 

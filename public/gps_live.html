@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live GPS Elevation</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <link rel="stylesheet" href="css/gps_live.css" />
+    <link rel="stylesheet" href="css_gps_live.css" />
 </head>
 <body>
     <div id="version-popup" class="version-popup">
@@ -18,10 +18,10 @@
         <div class="recent-changes">
             <h3>Recent Updates</h3>
             <ul id="recent-changes-list">
-                <li>Enhanced GPS accuracy filtering</li>
+                <li>Added session tracking and checkpoint system</li>
+                <li>Enhanced history modal with multi-session support</li>
+                <li>Improved GPS accuracy filtering</li>
                 <li>Added mobile-optimized interface</li>
-                <li>Improved location tracking</li>
-                <li>Real-time elevation updates</li>
             </ul>
         </div>
         <div class="gps-tips">
@@ -34,9 +34,123 @@
         </div>
         <div class="button-group">
             <button id="refresh-gps-btn">Refresh GPS</button>
+            <button id="show-history-btn">Show My History</button>
+            <button id="create-checkpoint-btn">📍 Create Checkpoint</button>
             <button id="close-popup-btn">Close</button>
         </div>
     </div>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="history-modal">
+        <div class="history-content">
+            <div class="history-header">
+                <h2>My GPS History</h2>
+                <button id="close-history-btn" class="close-btn">&times;</button>
+            </div>
+            
+            <div class="history-stats">
+                <div class="stat-item">
+                    <label>Total Points</label>
+                    <span id="total-points">0</span>
+                </div>
+                <div class="stat-item">
+                    <label>Distance Traveled</label>
+                    <span id="total-distance">0 km</span>
+                </div>
+                <div class="stat-item">
+                    <label>Max Speed</label>
+                    <span id="max-speed">0 km/h</span>
+                </div>
+                <div class="stat-item">
+                    <label>Session Time</label>
+                    <span id="session-time">0 min</span>
+                </div>
+            </div>
+
+            <div class="history-tabs">
+                <button class="tab-btn active" data-tab="travel">Travel Map</button>
+                <button class="tab-btn" data-tab="elevation">Elevation</button>
+                <button class="tab-btn" data-tab="speed">Speed</button>
+                <button class="tab-btn" data-tab="data">Raw Data</button>
+            </div>
+
+            <div class="history-content-area">
+                <div id="travel-tab" class="tab-content active">
+                    <div class="travel-map-container">
+                        <svg id="travel-svg" class="travel-svg"></svg>
+                    </div>
+                </div>
+
+                <div id="elevation-tab" class="tab-content">
+                    <div class="chart-container">
+                        <svg id="elevation-history-svg" class="history-chart"></svg>
+                    </div>
+                </div>
+
+                <div id="speed-tab" class="tab-content">
+                    <div class="chart-container">
+                        <svg id="speed-chart-svg" class="history-chart"></svg>
+                    </div>
+                </div>
+
+                <div id="data-tab" class="tab-content">
+                    <div class="data-table-container">
+                        <table id="data-table" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Lat</th>
+                                    <th>Lon</th>
+                                    <th>Elevation</th>
+                                    <th>Speed</th>
+                                    <th>Accuracy</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Checkpoint Modal -->
+    <div id="checkpoint-modal" class="checkpoint-modal">
+        <div class="checkpoint-content">
+            <div class="checkpoint-header">
+                <h2>📍 Create Checkpoint</h2>
+                <button id="close-checkpoint-btn" class="close-btn">&times;</button>
+            </div>
+            
+            <div class="checkpoint-form">
+                <div class="form-group">
+                    <label for="checkpoint-name">Checkpoint Name:</label>
+                    <input type="text" id="checkpoint-name" placeholder="e.g., Coffee Shop, Home Base, etc." maxlength="50">
+                </div>
+                
+                <div class="form-group">
+                    <label for="checkpoint-description">Description (optional):</label>
+                    <textarea id="checkpoint-description" placeholder="Add any notes about this location..." maxlength="200"></textarea>
+                </div>
+                
+                <div class="checkpoint-info">
+                    <p><strong>Time:</strong> <span id="checkpoint-time">Now</span></p>
+                    <p><strong>Location:</strong> <span id="checkpoint-location">Getting location...</span></p>
+                </div>
+                
+                <div class="checkpoint-buttons">
+                    <button id="save-checkpoint-btn" class="primary-btn">Save Checkpoint</button>
+                    <button id="cancel-checkpoint-btn" class="secondary-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Checkpoint Button -->
+    <button id="floating-checkpoint-btn" class="floating-checkpoint-btn" title="Create Checkpoint">
+        📍
+    </button>
 
     <div class="compass info-panel">
         <div class="compass-arrow" id="compass-arrow"></div>
@@ -47,6 +161,15 @@
     </div>
 
     <div class="coordinates info-panel">
+        <div>
+            <label>USER</label>
+            <span id="user-id" class="user-id">----</span>
+        </div>
+        <div>
+            <label>SESSION</label>
+            <span id="session-number" class="session-number">--</span>
+            <button id="new-session-btn" class="new-session-btn" title="Start New Session">🔄</button>
+        </div>
         <div>
             <label>LAT</label>
             <span id="lat" class="lat">---.------</span>
@@ -92,6 +215,6 @@
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.min.js"></script>
-    <script type="module" src="js/gps_live.js"></script>
+    <script type="module" src="js_gps_live.js"></script>
 </body>
 </html> 

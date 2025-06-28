@@ -1,0 +1,19 @@
+{
+  "checkpoints": [
+    {
+      "id": "checkpoint_1751137248815",
+      "name": "Current Position",
+      "description": "Checkpoint created during development session",
+      "timestamp": 1751137248815,
+      "dateTime": "6/28/2025, 1:00:48 PM",
+      "isoTime": "2025-06-28T19:00:48.815Z",
+      "coordinates": null,
+      "sessionId": null,
+      "friendlySessionName": null
+    }
+  ],
+  "metadata": {
+    "created": "2025-06-28T19:00:48.808Z",
+    "lastUpdated": "2025-06-28T19:00:48.855Z"
+  }
+}

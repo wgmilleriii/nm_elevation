@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Elevation Tracking System</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header { background: #2c3e50; color: white; padding: 20px; margin: -30px -30px 30px -30px; border-radius: 10px 10px 0 0; text-align: center; }
+        .section { margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 5px; }
+        .link-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }
+        .link-box { background: #3498db; color: white; padding: 20px; border-radius: 5px; text-decoration: none; text-align: center; transition: background 0.3s; }
+        .link-box:hover { background: #2980b9; text-decoration: none; color: white; }
+        .api-endpoint { background: #2c3e50; color: #ecf0f1; padding: 10px; border-radius: 3px; font-family: monospace; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌍 GPS Elevation Tracking System</h1>
+            <p>Real-time GPS tracking with automatic elevation lookup</p>
+        </div>
+
+        <div class="section">
+            <h2>📱 Client Applications</h2>
+            <div class="link-grid">
+                <a href="gps_live.html" class="link-box">
+                    <h3>📍 Live GPS Tracker</h3>
+                    <p>Real-time GPS tracking with elevation display</p>
+                </a>
+                <a href="gps_tracker.html" class="link-box">
+                    <h3>🗺️ GPS Data Collector</h3>
+                    <p>Collect and visualize GPS tracking data</p>
+                </a>
+                <a href="elevation_new_mexico.html" class="link-box">
+                    <h3>🏔️ New Mexico Elevation Map</h3>
+                    <p>Interactive elevation visualization</p>
+                </a>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔧 API Endpoints</h2>
+            <p>The system provides the following REST API endpoints:</p>
+            <div class="api-endpoint">POST /api/user/init - Initialize user session</div>
+            <div class="api-endpoint">POST /api/user/session/start - Start GPS tracking session</div>
+            <div class="api-endpoint">POST /api/user/track-point - Save GPS point</div>
+            <div class="api-endpoint">GET /api/gps-queue - Get points needing elevation</div>
+            <div class="api-endpoint">POST /api/elevation-update - Update point with elevation</div>
+            <div class="api-endpoint">GET /api/stats - Get system statistics</div>
+        </div>
+
+        <div class="section">
+            <h2>📚 Documentation</h2>
+            <p><a href="DEPLOYMENT_GUIDE.md">📖 Deployment Guide</a> - Complete setup instructions</p>
+            <p><a href="MOBILE_GUIDE.md">📱 Mobile Guide</a> - Mobile GPS tracking setup</p>
+            <p><a href="API_DOCUMENTATION.md">🔧 API Documentation</a> - Complete API reference</p>
+        </div>
+
+        <div class="section">
+            <h2>⚡ System Status</h2>
+            <p>System is operational and ready to accept GPS tracking data.</p>
+            <p><strong>Last Updated:</strong> <span id="timestamp"></span></p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+    </script>
+</body>
+</html>

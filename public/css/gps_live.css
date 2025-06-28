@@ -73,6 +73,45 @@ body {
     opacity: 0.7;
 }
 
+.user-id {
+    color: #4ecdc4;
+    font-weight: bold;
+    font-size: 0.8em;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 80px;
+}
+
+.session-number { 
+    color: #ffff4a; 
+}
+
+.new-session-btn {
+    background: #ff6b6b;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    color: white;
+    cursor: pointer;
+    margin-left: 5px;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.new-session-btn:hover {
+    background: #ff5252;
+    transform: scale(1.1);
+}
+
+.new-session-btn:active {
+    transform: scale(0.95);
+}
 .lat { color: #4a9eff; }
 .lon { color: #4aff4a; }
 .elev { color: #ff4a4a; }
@@ -550,6 +589,305 @@ body {
     .accuracy-indicator.accuracy-very-low { box-shadow: 0 0 4px #ff0000; }
 }
 
+/* History Modal Styles */
+.history-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(10px);
+    z-index: 2000;
+    overflow: hidden;
+}
+
+.history-content {
+    width: 95vw;
+    height: 95vh;
+    max-width: 1200px;
+    margin: 2.5vh auto;
+    background: #1a1a1a;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.history-header h2 {
+    color: white;
+    font-size: 24px;
+    margin: 0;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 32px;
+    cursor: pointer;
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.close-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.history-stats {
+    display: flex;
+    gap: 20px;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 120px;
+}
+
+.stat-item label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-item span {
+    font-size: 20px;
+    font-weight: bold;
+    color: white;
+}
+
+.history-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 16px 20px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-btn:hover {
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active {
+    color: white;
+    border-bottom-color: #4a9eff;
+    background: rgba(74, 158, 255, 0.1);
+}
+
+.history-content-area {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.tab-content {
+    display: none;
+    width: 100%;
+    height: 100%;
+    padding: 20px;
+    overflow: auto;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.travel-map-container {
+    width: 100%;
+    height: 100%;
+    background: #0a0a0a;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.travel-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.chart-container {
+    width: 100%;
+    height: 100%;
+    background: #0a0a0a;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.history-chart {
+    width: 100%;
+    height: 100%;
+}
+
+.data-table-container {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background: #0a0a0a;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.data-table th {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    padding: 12px 8px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    position: sticky;
+    top: 0;
+}
+
+.data-table td {
+    padding: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.data-table tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Travel Map Styles */
+.travel-path {
+    fill: none;
+    stroke: #4a9eff;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.travel-point {
+    fill: #4a9eff;
+    stroke: #1a1a1a;
+    stroke-width: 1;
+}
+
+.travel-point.start {
+    fill: #4aff4a;
+    r: 6;
+}
+
+.travel-point.end {
+    fill: #ff4a4a;
+    r: 6;
+}
+
+.travel-bounds {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 1;
+    stroke-dasharray: 5,5;
+}
+
+.travel-grid {
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 0.5;
+}
+
+.travel-label {
+    fill: rgba(255, 255, 255, 0.7);
+    font-size: 10px;
+    text-anchor: middle;
+}
+
+#show-history-btn {
+    background: linear-gradient(135deg, #4a9eff, #9f4aff);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin: 0 8px;
+}
+
+#show-history-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+}
+
+@media (max-width: 768px) {
+    .history-content {
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        border-radius: 0;
+    }
+    
+    .history-stats {
+        gap: 15px;
+        padding: 15px 20px;
+    }
+    
+    .stat-item {
+        min-width: 100px;
+    }
+    
+    .stat-item span {
+        font-size: 16px;
+    }
+    
+    .tab-btn {
+        padding: 12px 16px;
+        font-size: 12px;
+    }
+    
+    .tab-content {
+        padding: 15px;
+    }
+    
+    .data-table {
+        font-size: 11px;
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: 6px 4px;
+    }
+}
+
 /* Additional mobile improvements */
 @media (max-width: 480px) {
     .coordinates div {
@@ -576,4 +914,228 @@ body {
 .coordinates span,
 .time-label {
     user-select: text;
+}
+
+/* Checkpoint Modal Styles */
+.checkpoint-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+}
+
+.checkpoint-content {
+    background: #1a1a1a;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow: auto;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.checkpoint-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.checkpoint-header h2 {
+    color: #fff;
+    margin: 0;
+    font-size: 18px;
+}
+
+.checkpoint-form {
+    padding: 24px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #4a9eff;
+    box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+    max-height: 120px;
+}
+
+.checkpoint-info {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+}
+
+.checkpoint-info p {
+    margin: 0 0 8px 0;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+}
+
+.checkpoint-info p:last-child {
+    margin-bottom: 0;
+}
+
+.checkpoint-info strong {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.checkpoint-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.primary-btn {
+    background: linear-gradient(135deg, #4a9eff, #9f4aff);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.primary-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+}
+
+.secondary-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.secondary-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+/* Floating Checkpoint Button */
+.floating-checkpoint-btn {
+    position: fixed;
+    bottom: 120px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(255, 107, 107, 0.4);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.floating-checkpoint-btn:hover {
+    transform: translateY(-4px) scale(1.1);
+    box-shadow: 0 8px 24px rgba(255, 107, 107, 0.6);
+}
+
+.floating-checkpoint-btn:active {
+    transform: translateY(-2px) scale(1.05);
+}
+
+/* Checkpoint button in popup */
+#create-checkpoint-btn {
+    background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin: 0 8px;
+}
+
+#create-checkpoint-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+/* Mobile responsiveness for checkpoint modal */
+@media (max-width: 768px) {
+    .checkpoint-content {
+        width: 95%;
+        margin: 20px;
+    }
+    
+    .checkpoint-header {
+        padding: 16px 20px;
+    }
+    
+    .checkpoint-form {
+        padding: 20px;
+    }
+    
+    .checkpoint-buttons {
+        flex-direction: column;
+    }
+    
+    .primary-btn,
+    .secondary-btn {
+        width: 100%;
+        margin: 0;
+    }
+    
+    .floating-checkpoint-btn {
+        bottom: 100px;
+        right: 16px;
+        width: 56px;
+        height: 56px;
+        font-size: 20px;
+    }
 } 

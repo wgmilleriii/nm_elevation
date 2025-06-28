@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Elevation System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .app-card {
+            background: rgba(255,255,255,0.2);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        .app-card:hover {
+            transform: translateY(-5px);
+        }
+        .app-card a {
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .app-card p {
+            margin-top: 10px;
+            opacity: 0.9;
+        }
+        .api-section {
+            margin-top: 40px;
+            padding: 20px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+        }
+        .api-links {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        .api-links a {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 15px;
+            border-radius: 5px;
+            color: white;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+        .docs-section {
+            margin-top: 30px;
+        }
+        .docs-links {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        .docs-links a {
+            background: rgba(255,255,255,0.3);
+            padding: 10px 20px;
+            border-radius: 5px;
+            color: white;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌍 GPS Elevation System</h1>
+        
+        <div class="app-grid">
+            <div class="app-card">
+                <a href="gps_live.html">📱 Live GPS Tracker</a>
+                <p>Real-time GPS tracking with elevation data, speed monitoring, and interactive maps</p>
+            </div>
+            
+            <div class="app-card">
+                <a href="gps_tracker.html">📊 Data Collector</a>
+                <p>Advanced GPS data collection with route tracking and elevation profiling</p>
+            </div>
+            
+            <div class="app-card">
+                <a href="elevation_new_mexico.html">🗺️ New Mexico Elevation Map</a>
+                <p>Interactive elevation visualization of New Mexico terrain and topography</p>
+            </div>
+        </div>
+        
+        <div class="api-section">
+            <h3>🔧 API Endpoints</h3>
+            <div class="api-links">
+                <a href="api/stats">📈 System Stats</a>
+                <a href="api/gps-queue">📋 Processing Queue</a>
+                <a href="api/logs">📝 System Logs</a>
+                <a href="api/queue/status">⚡ Queue Status</a>
+            </div>
+        </div>
+        
+        <div class="docs-section">
+            <h3>📚 Documentation</h3>
+            <div class="docs-links">
+                <a href="docs/MOBILE_GUIDE.md">📱 Mobile Guide</a>
+                <a href="docs/API_DOCUMENTATION.md">🔌 API Documentation</a>
+                <a href="docs/DEPLOYMENT_GUIDE.md">🚀 Deployment Guide</a>
+                <a href="docs/README.md">📖 README</a>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 40px; opacity: 0.8;">
+            <p>🌟 Ready for GPS elevation tracking and terrain analysis!</p>
+        </div>
+    </div>
+</body>
+</html> 

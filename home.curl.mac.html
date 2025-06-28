@@ -3,150 +3,171 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Mexico Elevation Visualization</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #f0f0f0;
-        }
-        #container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        #visualization {
-            width: 100%;
-            height: 800px;
-            border: 1px solid #ddd;
-            background: white;
-        }
-        .point {
-            transition: r 0.2s;
-        }
-        .point:hover {
-            r: 4;
-        }
-        #stats {
-            margin-top: 20px;
-            padding: 10px;
-            background: #f8f8f8;
-            border-radius: 4px;
-        }
-        .legend {
-            display: flex;
-            align-items: center;
-            margin-top: 10px;
-        }
-        .legend-gradient {
-            width: 200px;
-            height: 20px;
-            margin-right: 10px;
-            background: linear-gradient(to right, #0000ff, #ffff00);
-        }
-        .resolution-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            padding: 8px 16px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .resolution-toggle:hover {
-            background: #45a049;
-        }
-    </style>
+    <title>Live GPS Elevation</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="css/gps_live.css" />
 </head>
 <body>
-    <div id="container">
-        <button id="resolution-toggle" class="resolution-toggle" onclick="toggleResolution()">Switch to Low Resolution</button>
-        <div class="legend">
-            <div class="legend-gradient"></div>
-            <span>Low → High Elevation</span>
+    <div id="version-popup" class="version-popup">
+        <h2>GPS Live Tracker</h2>
+        <div class="version-info">
+            <p>Version: <span id="js-version">Loading...</span></p>
+            <p>Node.js: <span id="node-version">Loading...</span></p>
+            <p>GPS Status: <span id="gps-status">Checking...</span></p>
         </div>
-        <svg id="visualization" preserveAspectRatio="xMidYMid meet"></svg>
-        <div id="stats"></div>
+        <div class="recent-changes">
+            <h3>Recent Updates</h3>
+            <ul id="recent-changes-list">
+                <li>Enhanced GPS accuracy filtering</li>
+                <li>Added mobile-optimized interface</li>
+                <li>Improved location tracking</li>
+                <li>Real-time elevation updates</li>
+            </ul>
+        </div>
+        <div class="gps-tips">
+            <h3>GPS Tips</h3>
+            <ul>
+                <li>Move to an area with clear sky view</li>
+                <li>Allow location permissions</li>
+                <li>Wait 10-15s for GPS to stabilize</li>
+            </ul>
+        </div>
+        <div class="button-group">
+            <button id="refresh-gps-btn">Refresh GPS</button>
+            <button id="show-history-btn">Show My History</button>
+            <button id="close-popup-btn">Close</button>
+        </div>
     </div>
-    
-    <script>
-        let currentResolution = 'high';
 
-        async function fetchData() {
-            const response = await fetch(`/api/elevation-data${currentResolution === 'high' ? '?resolution=high' : ''}`);
-            return response.json();
-        }
+    <!-- History Modal -->
+    <div id="history-modal" class="history-modal">
+        <div class="history-content">
+            <div class="history-header">
+                <h2>My GPS History</h2>
+                <button id="close-history-btn" class="close-btn">&times;</button>
+            </div>
+            
+            <div class="history-stats">
+                <div class="stat-item">
+                    <label>Total Points</label>
+                    <span id="total-points">0</span>
+                </div>
+                <div class="stat-item">
+                    <label>Distance Traveled</label>
+                    <span id="total-distance">0 km</span>
+                </div>
+                <div class="stat-item">
+                    <label>Max Speed</label>
+                    <span id="max-speed">0 km/h</span>
+                </div>
+                <div class="stat-item">
+                    <label>Session Time</label>
+                    <span id="session-time">0 min</span>
+                </div>
+            </div>
 
-        function getElevationColor(elevation, minElevation, maxElevation) {
-            if (elevation === null) {
-                return 'rgba(255, 255, 255, 0.5)';
-            }
-            const normalizedElevation = (elevation - minElevation) / (maxElevation - minElevation);
-            const r = Math.round(normalizedElevation * 255);
-            const g = Math.round(normalizedElevation * 255);
-            const b = Math.round(255 * (1 - normalizedElevation));
-            return `rgb(${r},${g},${b})`;
-        }
+            <div class="history-tabs">
+                <button class="tab-btn active" data-tab="travel">Travel Map</button>
+                <button class="tab-btn" data-tab="elevation">Elevation</button>
+                <button class="tab-btn" data-tab="speed">Speed</button>
+                <button class="tab-btn" data-tab="data">Raw Data</button>
+            </div>
 
-        async function toggleResolution() {
-            const button = document.getElementById('resolution-toggle');
-            currentResolution = currentResolution === 'low' ? 'high' : 'low';
-            button.textContent = `Switch to ${currentResolution === 'low' ? 'High' : 'Low'} Resolution`;
-            await visualizeData();
-        }
+            <div class="history-content-area">
+                <div id="travel-tab" class="tab-content active">
+                    <div class="travel-map-container">
+                        <svg id="travel-svg" class="travel-svg"></svg>
+                    </div>
+                </div>
 
-        async function visualizeData() {
-            const { points, stats } = await fetchData();
-            const svg = document.getElementById('visualization');
-            
-            // Clear existing points
-            svg.innerHTML = '';
-            
-            // Calculate dimensions
-            const width = svg.clientWidth;
-            const height = svg.clientHeight;
-            const padding = 20;
-            
-            // Find bounds
-            const minLat = 31.33;
-            const maxLat = 37.00;
-            const minLon = -109.05;
-            const maxLon = -103.00;
-            
-            // Create points
-            points.forEach(point => {
-                const x = ((point.longitude - minLon) / (maxLon - minLon)) * (width - 2 * padding) + padding;
-                const y = height - (((point.latitude - minLat) / (maxLat - minLat)) * (height - 2 * padding) + padding);
-                
-                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                circle.setAttribute('cx', x);
-                circle.setAttribute('cy', y);
-                circle.setAttribute('r', 2);
-                circle.setAttribute('fill', getElevationColor(point.elevation, stats.min_elevation, stats.max_elevation));
-                circle.setAttribute('class', 'point');
-                
-                // Add tooltip
-                circle.setAttribute('title', `Lat: ${point.latitude.toFixed(4)}, Lon: ${point.longitude.toFixed(4)}\nElevation: ${point.elevation.toFixed(1)}m`);
-                
-                svg.appendChild(circle);
-            });
-            
-            // Update stats
-            document.getElementById('stats').innerHTML = `
-                Points: ${stats.point_count.toLocaleString()}<br>
-                Elevation Range: ${stats.min_elevation.toFixed(1)}m to ${stats.max_elevation.toFixed(1)}m<br>
-                Resolution: ${stats.resolution}
-            `;
-        }
+                <div id="elevation-tab" class="tab-content">
+                    <div class="chart-container">
+                        <svg id="elevation-history-svg" class="history-chart"></svg>
+                    </div>
+                </div>
 
-        // Initialize visualization
-        visualizeData();
-    </script>
+                <div id="speed-tab" class="tab-content">
+                    <div class="chart-container">
+                        <svg id="speed-chart-svg" class="history-chart"></svg>
+                    </div>
+                </div>
+
+                <div id="data-tab" class="tab-content">
+                    <div class="data-table-container">
+                        <table id="data-table" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Lat</th>
+                                    <th>Lon</th>
+                                    <th>Elevation</th>
+                                    <th>Speed</th>
+                                    <th>Accuracy</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="compass info-panel">
+        <div class="compass-arrow" id="compass-arrow"></div>
+        <div>
+            <label>HDG</label>
+            <span id="heading" class="heading">---°</span>
+        </div>
+    </div>
+
+    <div class="coordinates info-panel">
+        <div>
+            <label>LAT</label>
+            <span id="lat" class="lat">---.------</span>
+        </div>
+        <div>
+            <label>LON</label>
+            <span id="lon" class="lon">---.------</span>
+        </div>
+        <div>
+            <label>ELEV</label>
+            <span id="elev" class="elev">----</span>
+            <span class="speed-unit">m</span>
+        </div>
+        <div>
+            <label>SPD</label>
+            <span id="speed" class="speed">--.-</span>
+            <span class="speed-unit">km/h</span>
+            <div class="speed-graph">
+                <div id="speed-bar" class="speed-bar"></div>
+            </div>
+        </div>
+        <div>
+            <label>ACC</label>
+            <span id="acc">--</span>
+            <span class="speed-unit">m</span>
+            <span id="acc-indicator" class="accuracy-indicator"></span>
+        </div>
+    </div>
+
+    <div id="map"></div>
+    <div id="svg-container">
+        <div class="graph-container">
+            <div class="graph-label">ELEVATION</div>
+            <svg id="elevation-svg"></svg>
+        </div>
+        <div class="graph-divider"></div>
+        <div class="graph-container">
+            <div class="graph-label">SPEED</div>
+            <svg id="speed-history-svg"></svg>
+            <div class="time-axis" id="time-axis"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.min.js"></script>
+    <script type="module" src="js/gps_live.js"></script>
 </body>
 </html> 
