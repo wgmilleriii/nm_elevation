@@ -4,6 +4,9 @@ const CORRALES_LON = -106.6067;
 const PAISANO_LAT = 35.09993547269065;
 const PAISANO_LON = -106.51323662365995;
 
+// Version
+const VERSION = '3.4.0';
+
 // Google Maps API key
 const GOOGLE_MAPS_API_KEY = 'AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8';
 
@@ -16,6 +19,7 @@ const DEFAULT_SETTINGS = {
 };
 
 // Make constants available globally
+window.VERSION = VERSION;
 window.CORRALES_LAT = CORRALES_LAT;
 window.CORRALES_LON = CORRALES_LON;
 window.PAISANO_LAT = PAISANO_LAT;

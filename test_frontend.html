@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+    <h1>Frontend JavaScript Test</h1>
+    <div id="test-results"></div>
+    
+    <!-- Mock elements to prevent null reference errors -->
+    <div id="version-popup" style="display: none;"></div>
+    <div id="js-version" style="display: none;"></div>
+    <div id="node-version" style="display: none;"></div>
+    <div id="gps-status" style="display: none;"></div>
+    <div id="close-popup-btn" style="display: none;"></div>
+    <div id="refresh-gps-btn" style="display: none;"></div>
+    <div id="show-history-btn" style="display: none;"></div>
+    <div id="new-session-btn" style="display: none;"></div>
+    <div id="user-id" style="display: none;"></div>
+    <div id="session-number" style="display: none;"></div>
+    <div id="history-modal" style="display: none;"></div>
+    <div id="close-history-btn" style="display: none;"></div>
+    <div id="checkpoint-modal" style="display: none;"></div>
+    <div id="close-checkpoint-btn" style="display: none;"></div>
+    <div id="cancel-checkpoint-btn" style="display: none;"></div>
+    <div id="save-checkpoint-btn" style="display: none;"></div>
+    <div id="floating-checkpoint-btn" style="display: none;"></div>
+    <div id="checkpoint-name" style="display: none;"></div>
+
+    <script>
+        // Test config.js loading
+        console.log('🧪 Testing config.js...');
+        
+        // Mock Leaflet for testing
+        window.L = {
+            map: () => ({ setView: () => {}, on: () => {} }),
+            tileLayer: () => ({ addTo: () => {} }),
+            marker: () => ({ addTo: () => {}, setLatLng: () => {}, setRotationAngle: () => {} }),
+            icon: () => ({}),
+            polyline: () => ({ addTo: () => {} })
+        };
+        
+        function addTestResult(message, type = 'success') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            document.getElementById('test-results').appendChild(div);
+        }
+        
+        // Track console errors
+        const originalError = console.error;
+        let errorCount = 0;
+        console.error = function(...args) {
+            errorCount++;
+            addTestResult(`Console Error: ${args.join(' ')}`, 'error');
+            originalError.apply(console, args);
+        };
+        
+        // Track console warnings
+        const originalWarn = console.warn;
+        let warnCount = 0;
+        console.warn = function(...args) {
+            warnCount++;
+            addTestResult(`Console Warning: ${args.join(' ')}`, 'warning');
+            originalWarn.apply(console, args);
+        };
+        
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                addTestResult(`Test completed: ${errorCount} errors, ${warnCount} warnings`);
+                if (errorCount === 0) {
+                    addTestResult('✅ No JavaScript errors detected!', 'success');
+                } else {
+                    addTestResult(`❌ ${errorCount} JavaScript errors found`, 'error');
+                }
+            }, 2000);
+        });
+    </script>
+    
+    <script src="elevation/js/config.js"></script>
+    <script type="module" src="elevation/js/gps_live.js"></script>
+</body>
+</html> 

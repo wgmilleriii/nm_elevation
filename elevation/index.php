@@ -40,6 +40,71 @@ if (empty($path)) {
 // Log all requests
 logRequest($method, $path, file_get_contents('php://input'));
 
+// Add logging endpoints before the existing API routes
+if ($path === '/api/log' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    $logEntry = [
+        'timestamp' => $input['timestamp'] ?? date('c'),
+        'level' => $input['level'] ?? 'info',
+        'message' => $input['message'] ?? 'No message',
+        'userAgent' => $input['userAgent'] ?? $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
+        'url' => $input['url'] ?? $_SERVER['HTTP_REFERER'] ?? 'Unknown',
+        'userId' => $input['userId'] ?? 'anonymous',
+        'sessionId' => $input['sessionId'] ?? 'none',
+        'deviceId' => $input['deviceId'] ?? 'unknown',
+        'data' => $input['data'] ?? [],
+        'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+    ];
+    
+    // Create logs directory if it doesn't exist
+    if (!file_exists('data/logs')) {
+        mkdir('data/logs', 0755, true);
+    }
+    
+    // Write to daily log file
+    $logFile = 'data/logs/client_' . date('Y-m-d') . '.log';
+    $logLine = json_encode($logEntry) . "\n";
+    
+    file_put_contents($logFile, $logLine, FILE_APPEND | LOCK_EX);
+    
+    header('Content-Type: application/json');
+    echo json_encode(['status' => 'logged']);
+    exit;
+}
+
+if ($path === '/api/logs' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $date = $_GET['date'] ?? date('Y-m-d');
+    $logFile = 'data/logs/client_' . $date . '.log';
+    
+    if (!file_exists($logFile)) {
+        header('Content-Type: application/json');
+        echo json_encode(['logs' => [], 'message' => 'No logs found for ' . $date]);
+        exit;
+    }
+    
+    $logs = [];
+    $lines = file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    
+    foreach ($lines as $line) {
+        $logEntry = json_decode($line, true);
+        if ($logEntry) {
+            $logs[] = $logEntry;
+        }
+    }
+    
+    // Get recent logs (last 50)
+    $logs = array_slice($logs, -50);
+    
+    header('Content-Type: application/json');
+    echo json_encode([
+        'date' => $date,
+        'count' => count($logs),
+        'logs' => $logs
+    ]);
+    exit;
+}
+
 // Route requests
 switch ($path) {
     case '/api/user/init':
@@ -129,6 +194,12 @@ switch ($path) {
     case '/api/version':
         if ($method === 'GET') {
             handleVersion();
+        }
+        break;
+        
+    case '/api/server/version':
+        if ($method === 'GET') {
+            handleServerVersion();
         }
         break;
         
@@ -1297,6 +1368,44 @@ function handleVersion() {
             'automatic_cleanup',
             'enhanced_logging'
         ]
+    ]);
+}
+
+function handleServerVersion() {
+    // Dedicated server version endpoint with additional details
+    $uptime = time() - filemtime(__FILE__);
+    $memoryUsage = memory_get_usage(true);
+    $peakMemory = memory_get_peak_usage(true);
+    
+    echo json_encode([
+        'api_version' => '2.2.0',
+        'php_version' => phpversion(),
+        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+        'timestamp' => date('c'),
+        'uptime_seconds' => $uptime,
+        'memory_usage_mb' => round($memoryUsage / 1024 / 1024, 2),
+        'peak_memory_mb' => round($peakMemory / 1024 / 1024, 2),
+        'server_name' => 'GPS Elevation API Server',
+        'endpoints' => [
+            'version' => '/api/version',
+            'server_version' => '/api/server/version',
+            'stats' => '/api/stats',
+            'gps_queue' => '/api/gps-queue',
+            'user_init' => '/api/user/init',
+            'session_start' => '/api/user/session/start',
+            'session_heartbeat' => '/api/user/session/heartbeat',
+            'session_lookup' => '/api/session/lookup'
+        ],
+        'features' => [
+            'global_session_numbering',
+            'session_heartbeat',
+            'automatic_cleanup',
+            'enhanced_logging',
+            'real_time_gps_tracking',
+            'elevation_data_collection',
+            'user_session_management'
+        ],
+        'status' => 'operational'
     ]);
 }
 

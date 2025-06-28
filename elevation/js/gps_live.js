@@ -3,6 +3,23 @@ const VERSION = '3.2.0';
 
 class GPSLiveTracker {
     constructor() {
+        // Enhanced logging for iPhone debugging
+        console.log('🚀 GPS Live Tracker v3.4.0 starting...');
+        console.log('📱 User Agent:', navigator.userAgent);
+        console.log('🌐 Location:', window.location.href);
+        console.log('⏰ Timestamp:', new Date().toISOString());
+        console.log('📍 Geolocation available:', !!navigator.geolocation);
+        console.log('🔒 HTTPS:', window.location.protocol === 'https:');
+        
+        // Log any immediate errors to server
+        this.logToServer('info', 'GPS Tracker Constructor Started', {
+            userAgent: navigator.userAgent,
+            location: window.location.href,
+            timestamp: new Date().toISOString(),
+            hasGeolocation: !!navigator.geolocation,
+            isHTTPS: window.location.protocol === 'https:'
+        });
+        
         this.tracking = false;
         this.trackPoints = [];
         this.map = null;
@@ -206,33 +223,49 @@ class GPSLiveTracker {
             cancelBtn: document.getElementById('cancel-checkpoint-btn')
         };
 
+        // Add null checks for all elements
+        if (!this.checkpointModal.element) {
+            console.warn('⚠️ Checkpoint modal elements not found - checkpoint functionality disabled');
+            return;
+        }
+
         // Close modal
-        this.checkpointModal.closeBtn.addEventListener('click', () => {
-            this.hideCheckpointModal();
-        });
+        if (this.checkpointModal.closeBtn) {
+            this.checkpointModal.closeBtn.addEventListener('click', () => {
+                this.hideCheckpointModal();
+            });
+        }
 
         // Cancel button
-        this.checkpointModal.cancelBtn.addEventListener('click', () => {
-            this.hideCheckpointModal();
-        });
+        if (this.checkpointModal.cancelBtn) {
+            this.checkpointModal.cancelBtn.addEventListener('click', () => {
+                this.hideCheckpointModal();
+            });
+        }
 
         // Save button
-        this.checkpointModal.saveBtn.addEventListener('click', () => {
-            this.saveCheckpoint();
-        });
+        if (this.checkpointModal.saveBtn) {
+            this.checkpointModal.saveBtn.addEventListener('click', () => {
+                this.saveCheckpoint();
+            });
+        }
 
         // Floating checkpoint button
         const floatingBtn = document.getElementById('floating-checkpoint-btn');
-        floatingBtn.addEventListener('click', () => {
-            this.showCheckpointModal();
-        });
+        if (floatingBtn) {
+            floatingBtn.addEventListener('click', () => {
+                this.showCheckpointModal();
+            });
+        }
 
         // Enter key to save
-        this.checkpointModal.nameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                this.saveCheckpoint();
-            }
-        });
+        if (this.checkpointModal.nameInput) {
+            this.checkpointModal.nameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    this.saveCheckpoint();
+                }
+            });
+        }
     }
 
     async showVersionInfo() {
@@ -633,7 +666,11 @@ class GPSLiveTracker {
     }
 
     async startTracking() {
+        console.log('🎯 Starting GPS tracking...');
+        this.logToServer('info', 'Starting GPS tracking');
+        
         if (!navigator.geolocation) {
+            this.logToServer('error', 'Geolocation not supported');
             alert('Geolocation is not supported by your browser');
             return;
         }
@@ -662,8 +699,16 @@ class GPSLiveTracker {
             console.log('User Agent:', navigator.userAgent);
 
             // Try to get more accurate position first
+            console.log('📍 Getting initial position...');
+            this.logToServer('info', 'Getting initial position');
+            
             const initialPosition = await this.getCurrentPosition();
-            console.log('Initial position:', initialPosition);
+            console.log('✅ Initial position:', initialPosition);
+            this.logToServer('info', 'Initial position acquired', {
+                lat: initialPosition.coords.latitude,
+                lon: initialPosition.coords.longitude,
+                accuracy: initialPosition.coords.accuracy
+            });
 
             // Start continuous tracking
             this.watchId = navigator.geolocation.watchPosition(
@@ -1166,6 +1211,35 @@ class GPSLiveTracker {
         });
     }
 
+    // Log errors and info to server for debugging
+    async logToServer(level, message, data = {}) {
+        try {
+            const logData = {
+                level,
+                message,
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                url: window.location.href,
+                userId: this.userId,
+                sessionId: this.sessionId,
+                deviceId: this.deviceId,
+                data
+            };
+            
+            console.log(`📡 Logging to server [${level}]:`, message, data);
+            
+            await fetch('./api/log', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(logData)
+            });
+        } catch (err) {
+            console.error('Failed to log to server:', err);
+        }
+    }
+
     handleError(error) {
         console.error('GPS Error:', error);
         
@@ -1188,6 +1262,14 @@ class GPSLiveTracker {
                 }
                 break;
         }
+
+        // Log error to server for debugging
+        this.logToServer('error', 'GPS Error', {
+            error: error.message,
+            code: error.code,
+            errorMessage: errorMessage,
+            stack: error.stack
+        });
 
         // Update status and show popup
         this.updateGPSStatus('error', errorMessage);
