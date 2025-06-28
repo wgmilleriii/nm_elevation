@@ -50,13 +50,20 @@ class GPSLiveTracker {
             locationSource: document.getElementById('location-source')
         };
 
-        // Initialize popup elements
+        // Initialize popup elements with safety checks
         this.popup = {
             element: document.getElementById('version-popup'),
             gpsStatus: document.getElementById('gps-status'),
             refreshBtn: document.getElementById('refresh-gps-btn'),
             closeBtn: document.getElementById('close-popup-btn')
         };
+        
+        // Log missing elements for debugging
+        Object.keys(this.popup).forEach(key => {
+            if (!this.popup[key]) {
+                console.warn(`❌ Popup element not found: ${key}`);
+            }
+        });
 
         // Add manual location control
         this.addManualLocationControl();
@@ -101,27 +108,43 @@ class GPSLiveTracker {
     }
 
     setupPopupHandlers() {
-        // Close button
-        this.popup.closeBtn.addEventListener('click', () => {
-            this.popup.element.style.display = 'none';
-        });
+        // Close button - with safety check
+        if (this.popup.closeBtn) {
+            this.popup.closeBtn.addEventListener('click', () => {
+                this.popup.element.style.display = 'none';
+            });
+        } else {
+            console.warn('❌ Close button not found:', 'close-popup-btn');
+        }
 
-        // Refresh GPS button
-        this.popup.refreshBtn.addEventListener('click', () => {
-            this.restartGPS();
-        });
+        // Refresh GPS button - with safety check
+        if (this.popup.refreshBtn) {
+            this.popup.refreshBtn.addEventListener('click', () => {
+                this.restartGPS();
+            });
+        } else {
+            console.warn('❌ Refresh button not found:', 'refresh-gps-btn');
+        }
 
-        // Show history button
+        // Show history button - with safety check
         const showHistoryBtn = document.getElementById('show-history-btn');
-        showHistoryBtn.addEventListener('click', () => {
-            this.showHistoryModal();
-        });
+        if (showHistoryBtn) {
+            showHistoryBtn.addEventListener('click', () => {
+                this.showHistoryModal();
+            });
+        } else {
+            console.warn('❌ History button not found:', 'show-history-btn');
+        }
 
-        // Create checkpoint button
+        // Create checkpoint button - with safety check
         const createCheckpointBtn = document.getElementById('create-checkpoint-btn');
-        createCheckpointBtn.addEventListener('click', () => {
-            this.showCheckpointModal();
-        });
+        if (createCheckpointBtn) {
+            createCheckpointBtn.addEventListener('click', () => {
+                this.showCheckpointModal();
+            });
+        } else {
+            console.warn('❌ Checkpoint button not found:', 'create-checkpoint-btn');
+        }
 
         // Show popup on errors
         window.addEventListener('gps-error', () => {
@@ -216,18 +239,21 @@ class GPSLiveTracker {
         // Show JavaScript version
         this.elements.jsVersion.textContent = VERSION;
 
-        // Get Node.js version from server
+        // Get server version from API
         try {
             const response = await fetch('./api/version');
             if (response.ok) {
                 const data = await response.json();
-                this.elements.nodeVersion.textContent = data.version;
+                // Fix: Use node_version field for PHP version display
+                this.elements.nodeVersion.textContent = data.node_version || data.version || 'Unknown';
+                console.log('✅ Version info loaded:', data);
             } else {
-                this.elements.nodeVersion.textContent = 'Unknown';
+                console.error('❌ Version API failed:', response.status);
+                this.elements.nodeVersion.textContent = 'API Error';
             }
         } catch (error) {
-            console.error('Failed to get Node.js version:', error);
-            this.elements.nodeVersion.textContent = 'Error';
+            console.error('❌ Failed to get server version:', error);
+            this.elements.nodeVersion.textContent = 'Network Error';
         }
 
         // Update GPS status
