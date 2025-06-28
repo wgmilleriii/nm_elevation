@@ -1,0 +1,13 @@
+RewriteEngine On
+
+# Route all /api/* requests to index.php
+RewriteRule ^api/(.*)$ index.php [QSA,L]
+
+# Set CORS headers for API requests
+Header always set Access-Control-Allow-Origin "*"
+Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+
+# Handle preflight OPTIONS requests
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ index.php [QSA,L] 

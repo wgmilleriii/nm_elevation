@@ -1,6 +1,21 @@
 # Mobile GPS Tracking Guide
 
-## Quick Start
+## 🌐 Live GPS Tracking System
+
+### **NEW: Cloud-Based GPS Tracking**
+Your GPS elevation system is now live at:
+- **🏠 Landing Page**: https://hanon.artsmetrics.net/elevation/home.html
+- **📍 Live GPS Tracker**: https://hanon.artsmetrics.net/elevation/gps_live.html
+- **🗺️ GPS Data Collector**: https://hanon.artsmetrics.net/elevation/gps_tracker.html
+- **🏔️ Elevation Map**: https://hanon.artsmetrics.net/elevation/elevation_new_mexico.html
+
+### Quick Start (Cloud Version)
+1. Open your phone's browser
+2. Go to: **https://hanon.artsmetrics.net/elevation/gps_live.html**
+3. Allow location access when prompted
+4. Start tracking! ✨
+
+### Quick Start (Local Development)
 1. Connect your laptop to your phone's hotspot
 2. Start the server on your laptop
 3. Access the tracker on your phone at: `http://192.168.105.126:3001/gps_live.html`
@@ -107,11 +122,17 @@
 
 ## Links
 
-### Local Development
+### 🌐 Live Cloud System
+- [🏠 Landing Page](https://hanon.artsmetrics.net/elevation/home.html)
+- [📍 Live GPS Tracker](https://hanon.artsmetrics.net/elevation/gps_live.html)
+- [🗺️ GPS Data Collector](https://hanon.artsmetrics.net/elevation/gps_tracker.html)
+- [🏔️ Elevation Map](https://hanon.artsmetrics.net/elevation/elevation_new_mexico.html)
+
+### 💻 Local Development
 - [GPS Live Tracker](http://localhost:3001/gps_live.html)
 - [Journey Summary](http://localhost:3001/summary.html)
 
-### Documentation
+### 📚 Documentation
 - [Collection Algorithms](./COLLECTION_ALGORITHMS.md)
 - [Sync Setup](./SYNC_SETUP.md)
 - [Dummies Guide](./DUMMIES_GUIDE.md)

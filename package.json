@@ -6,6 +6,13 @@
   "main": "collect_sparse_points.js",
   "scripts": {
     "start": "node collect_sparse_points.js",
+    "server": "node server.js",
+    "deploy": "node deploy_remote.js",
+    "deploy:start": "./start_deployment.sh",
+    "deploy:pm2": "pm2 start deploy_remote.js --name elevation-service",
+    "deploy:stop": "pm2 stop elevation-service",
+    "deploy:restart": "pm2 restart elevation-service",
+    "deploy:logs": "pm2 logs elevation-service",
     "sync-to-pi": "node sync_to_pi.js",
     "sync-from-pi": "node sync_from_pi.js",
     "test": "node tests/run_gps_tests.cjs",
@@ -16,6 +23,7 @@
     "@serialport/parser-readline": "^13.0.0",
     "better-sqlite3": "^8.7.0",
     "express": "^5.1.0",
+    "node-fetch": "^3.3.2",
     "serialport": "^13.0.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
