@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live GPS Elevation</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="css/gps_live.css" />
+</head>
+<body>
+    <div id="version-popup" class="version-popup">
+        <h2>GPS Live Tracker</h2>
+        <p>Version: <span id="js-version">Loading...</span></p>
+        <p>Node.js: <span id="node-version">Loading...</span></p>
+        <button onclick="this.parentElement.style.display='none'">OK</button>
+    </div>
+
+    <div class="compass info-panel">
+        <div class="compass-arrow" id="compass-arrow"></div>
+        <div>
+            <label>HDG</label>
+            <span id="heading" class="heading">---°</span>
+        </div>
+    </div>
+
+    <div class="coordinates info-panel">
+        <div>
+            <label>LAT</label>
+            <span id="lat" class="lat">---.------</span>
+        </div>
+        <div>
+            <label>LON</label>
+            <span id="lon" class="lon">---.------</span>
+        </div>
+        <div>
+            <label>ELEV</label>
+            <span id="elev" class="elev">----</span>
+            <span class="speed-unit">m</span>
+        </div>
+        <div>
+            <label>SPD</label>
+            <span id="speed" class="speed">--.-</span>
+            <span class="speed-unit">km/h</span>
+            <div class="speed-graph">
+                <div id="speed-bar" class="speed-bar"></div>
+            </div>
+        </div>
+        <div>
+            <label>ACC</label>
+            <span id="acc">--</span>
+            <span class="speed-unit">m</span>
+            <span id="acc-indicator" class="accuracy-indicator"></span>
+        </div>
+    </div>
+
+    <div id="map"></div>
+    <div id="svg-container">
+        <div class="graph-container">
+            <div class="graph-label">ELEVATION</div>
+            <svg id="elevation-svg"></svg>
+        </div>
+        <div class="graph-divider"></div>
+        <div class="graph-container">
+            <div class="graph-label">SPEED</div>
+            <svg id="speed-history-svg"></svg>
+            <div class="time-axis" id="time-axis"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.min.js"></script>
+    <script type="module" src="js/gps_live.js"></script>
+</body>
+</html> 

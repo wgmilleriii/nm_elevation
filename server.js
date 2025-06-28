@@ -4,12 +4,13 @@ import fs from 'fs';
 import { spawn } from 'child_process';
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
+import { calculateDistance, calculatePointDistance } from './utils/distance.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = process.env.NODE_ENV === 'test' ? 3001 : 3000;
+const port = process.env.PORT || 3001;
 
 // Middleware
 app.use(express.static('public'));
@@ -27,45 +28,71 @@ if (!fs.existsSync(GRID_DB_DIR)) {
     fs.mkdirSync(GRID_DB_DIR, { recursive: true });
 }
 
-// Database connection pool
-const dbConnections = new Map();
+// Get database path from environment or use default
+const DB_PATH = process.env.TEST_DB_PATH || path.join(__dirname, 'grid_databases', 'user_tracking.db');
 
-// Get or create database connection
-function getDb(gridKey) {
-    if (!gridKey) {
-        throw new Error('Grid key is required');
-    }
-
-    // Check if we already have a connection
-    if (dbConnections.has(gridKey)) {
-        return dbConnections.get(gridKey);
-    }
-
-    // Create new connection
-    const dbPath = path.join(GRID_DB_DIR, `${gridKey}.db`);
-    console.log('Opening database at:', dbPath);
+// Initialize database
+async function getDb(dbName = 'user_tracking') {
+    const dbPath = path.join(GRID_DB_DIR, `${dbName}.db`);
     
-    try {
-        const db = new Database(dbPath);
-        
-        // Initialize if needed
+    // Create database if it doesn't exist
+    const db = new Database(dbPath);
+    
+    // Enable foreign keys
+    db.pragma('foreign_keys = ON');
+    
+    // Initialize schema based on database type
+    if (dbName === 'elevation_cache') {
         db.exec(`
             CREATE TABLE IF NOT EXISTS elevation_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 latitude REAL NOT NULL,
                 longitude REAL NOT NULL,
                 elevation REAL NOT NULL,
-                PRIMARY KEY (latitude, longitude)
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(latitude, longitude)
             );
-            CREATE INDEX IF NOT EXISTS idx_lat_lon ON elevation_points(latitude, longitude);
+            CREATE INDEX IF NOT EXISTS idx_points_location ON elevation_points(latitude, longitude);
         `);
+    } else if (dbName === 'user_tracking') {
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL UNIQUE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
 
-        // Store in connection pool
-        dbConnections.set(gridKey, db);
-        return db;
-    } catch (error) {
-        console.error(`Error opening database ${dbPath}:`, error);
-        throw error;
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                start_time DATETIME NOT NULL,
+                end_time DATETIME,
+                total_distance REAL,
+                max_elevation REAL,
+                min_elevation REAL,
+                avg_elevation REAL,
+                point_count INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_track_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                elevation REAL,
+                accuracy REAL NOT NULL,
+                timestamp DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES user_sessions(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+        `);
     }
+    
+    return db;
 }
 
 // Close all database connections on exit
@@ -260,21 +287,6 @@ function validateCoordinates(lat, lon) {
     );
 }
 
-// Calculate distance between two points in meters
-function calculateDistance(point1, point2) {
-    const R = 6371000; // Earth's radius in meters
-    const lat1 = point1.lat * Math.PI / 180;
-    const lat2 = point2.lat * Math.PI / 180;
-    const dLat = (point2.lat - point1.lat) * Math.PI / 180;
-    const dLon = (point2.lon - point1.lon) * Math.PI / 180;
-
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1) * Math.cos(lat2) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
-
 // API endpoints
 app.get('/api/elevation/batch', async (req, res) => {
     try {
@@ -307,8 +319,8 @@ app.post('/api/elevation/profile', async (req, res) => {
         const numPoints = body.numPoints || 100;
         const profilePoints = generateProfilePoints(body.start, body.end, numPoints);
         
-        // Calculate total distance
-        const totalDistance = calculateDistance(body.start, body.end);
+        // Calculate total distance using the utility function
+        const totalDistance = calculatePointDistance(body.start, body.end);
         const distanceStep = totalDistance / (numPoints - 1);
         
         const results = await Promise.all(
@@ -697,206 +709,535 @@ app.post('/api/collect_sparse', async (req, res) => {
     }
 });
 
-// Helper function to simulate elevation
-function simulateElevation(lat, lon) {
-    // Base elevation around 1500m (typical for New Mexico)
-    let elevation = 1500;
-    
-    // Add variation based on latitude (higher in north)
-    elevation += (lat - 34) * 100;
-    
-    // Add some longitude-based variation
-    elevation += Math.sin(lon * 0.5) * 200;
-    
-    // Add some random variation (±100m)
-    elevation += (Math.random() - 0.5) * 200;
-    
-    // Ensure elevation stays within reasonable bounds for New Mexico
-    elevation = Math.max(1000, Math.min(4000, elevation));
-    
-    return elevation;
-}
-
-// API endpoint to collect points
-app.post('/api/collect-points', async (req, res) => {
+// Add elevation endpoint for grid sampling
+app.get('/api/elevation', (req, res) => {
     try {
-        const { bounds, zoom } = req.body;
+        const { lat, lon } = req.query;
         
-        if (!bounds || !bounds.north || !bounds.south || !bounds.east || !bounds.west) {
-            throw new Error('Invalid bounds provided');
+        if (!lat || !lon) {
+            return res.status(400).json({
+                error: 'Missing required parameters: lat, lon'
+            });
         }
+
+        // Convert lat/lon to numbers
+        const latitude = parseFloat(lat);
+        const longitude = parseFloat(lon);
+
+        // Validate coordinates
+        if (isNaN(latitude) || isNaN(longitude)) {
+            return res.status(400).json({
+                error: 'Invalid coordinates format'
+            });
+        }
+
+        // Basic bounds check for reasonable values
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+            return res.status(400).json({
+                error: 'Coordinates out of valid range'
+            });
+        }
+
+        // Calculate elevation using the same method as test endpoint
+        const baseElevation = 1500; // Base elevation for New Mexico
+        const latEffect = (latitude - 34) * 100; // Higher in the north
+        const lonEffect = Math.sin(longitude * 0.5) * 200; // Variation based on longitude
+        const randomEffect = (Math.random() - 0.5) * 200; // Random variation
         
-        // Calculate grid coordinates
-        const centerLat = (bounds.north + bounds.south) / 2;
-        const centerLon = (bounds.east + bounds.west) / 2;
-        
-        // Generate grid key for this area
-        const gridKey = generateDbName({
-            minLat: bounds.south,
-            minLon: bounds.west,
-            maxLat: bounds.north,
-            maxLon: bounds.east
-        });
-        
-        console.log('Collecting points for:', { bounds, zoom, gridKey });
-        
-        // Get database connection
-        const db = getDb(gridKey);
-        
-        try {
-            // Calculate grid size based on zoom level
-            const gridSize = Math.pow(2, Math.min(zoom - 8, 6)); // Max 64x64 grid
-            const latStep = (bounds.north - bounds.south) / gridSize;
-            const lonStep = (bounds.east - bounds.west) / gridSize;
-            
-            const points = [];
-            
-            // Generate points in a grid pattern
-            for (let i = 0; i < gridSize; i++) {
-                for (let j = 0; j < gridSize; j++) {
-                    const lat = bounds.south + (i * latStep) + (latStep / 2);
-                    const lon = bounds.west + (j * lonStep) + (lonStep / 2);
-                    
-                    points.push({
-                        latitude: lat,
-                        longitude: lon,
-                        elevation: simulateElevation(lat, lon)
-                    });
+        let elevation = baseElevation + latEffect + lonEffect + randomEffect;
+        elevation = Math.max(1000, Math.min(4000, elevation)); // Keep within reasonable bounds
+        elevation = Math.round(elevation);
+
+        // Return elevation with metadata
+        res.json({ 
+            elevation,
+            metadata: {
+                lat: latitude,
+                lon: longitude,
+                source: 'simulation',
+                timestamp: new Date().toISOString(),
+                components: {
+                    base: baseElevation,
+                    latitudeEffect: latEffect,
+                    longitudeEffect: lonEffect,
+                    randomVariation: randomEffect
                 }
             }
+        });
+
+    } catch (error) {
+        console.error('Error in elevation endpoint:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            details: error.message
+        });
+    }
+});
+
+// Add collect-points endpoint
+app.post('/api/collect-points', async (req, res) => {
+    try {
+        const { bounds, zoom, algorithm = 'random' } = req.body;
+        
+        if (!bounds || !bounds.north || !bounds.south || !bounds.east || !bounds.west) {
+            return res.status(400).json({
+                error: 'Invalid bounds provided'
+            });
+        }
+
+        // Generate database name based on bounds and zoom
+        const dbName = `zoom_${zoom}_${bounds.south.toFixed(4)}_${bounds.west.toFixed(4)}`;
+        const db = await getDb(dbName);
+        
+        // Ensure we have the updated schema
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS elevation_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                elevation REAL,
+                collection_method TEXT NOT NULL,
+                zoom_level INTEGER NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(latitude, longitude, zoom_level)
+            );
             
-            console.log(`Generated ${points.length} points for grid`);
-            
-            // Insert points into database
+            CREATE INDEX IF NOT EXISTS idx_points_location 
+                ON elevation_points(latitude, longitude);
+            CREATE INDEX IF NOT EXISTS idx_points_zoom 
+                ON elevation_points(zoom_level);
+            CREATE INDEX IF NOT EXISTS idx_points_method 
+                ON elevation_points(collection_method);
+        `);
+
+        // Create collection manager instance
+        const manager = new CollectionManager();
+        manager.setAlgorithm(algorithm);
+
+        // Normalize bounds
+        const normalizedBounds = CollectionManager.normalizeBounds(bounds);
+        
+        // Collect points using specified algorithm
+        const points = await manager.collectPoints(normalizedBounds, zoom);
+        
+        // Begin transaction for point insertion
+        await db.exec('BEGIN TRANSACTION');
+        
+        try {
             const insertStmt = db.prepare(`
-                INSERT OR REPLACE INTO elevation_points (latitude, longitude, elevation)
-                VALUES (?, ?, ?)
+                INSERT OR REPLACE INTO elevation_points 
+                (latitude, longitude, elevation, collection_method, zoom_level)
+                VALUES (?, ?, ?, ?, ?)
             `);
             
-            // Begin transaction for better performance
-            const insertMany = db.transaction((points) => {
-                for (const point of points) {
-                    insertStmt.run(
-                        point.latitude,
-                        point.longitude,
-                        point.elevation
-                    );
-                }
-            });
+            for (const point of points) {
+                insertStmt.run(
+                    point.lat,
+                    point.lon,
+                    point.elevation,
+                    point.type || algorithm,
+                    zoom
+                );
+            }
             
-            // Execute the transaction
-            insertMany(points);
-            
-            // Get statistics
-            const stats = db.prepare(`
-                SELECT 
-                    COUNT(*) as count,
-                    MIN(elevation) as min_elevation,
-                    MAX(elevation) as max_elevation,
-                    AVG(elevation) as avg_elevation
-                FROM elevation_points
-                WHERE latitude BETWEEN ? AND ?
-                AND longitude BETWEEN ? AND ?
-            `).get(bounds.south, bounds.north, bounds.west, bounds.east);
-            
-            console.log('Collection completed:', stats);
+            await db.exec('COMMIT');
             
             res.json({
-                success: true,
-                points,
-                stats
+                points: points.length,
+                algorithm,
+                bounds: normalizedBounds,
+                zoom
             });
             
         } catch (error) {
-            console.error('Error in database operations:', error);
+            await db.exec('ROLLBACK');
             throw error;
         }
         
     } catch (error) {
         console.error('Error collecting points:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Helper function to get current timestamp in SQLite format
+function getCurrentTimestamp() {
+    return new Date().toISOString();
+}
+
+// User tracking endpoints
+app.post('/api/user/init', async (req, res) => {
+    try {
+        const { deviceId } = req.body;
+        
+        if (!deviceId) {
+            return res.status(400).json({
+                error: 'Device ID is required'
+            });
+        }
+
+        const db = await getDb();
+        
+        try {
+            // Check if user exists
+            const stmt = db.prepare('SELECT * FROM users WHERE device_id = ?');
+            let user = stmt.get(deviceId);
+            
+            if (!user) {
+                // Create new user
+                const insertStmt = db.prepare('INSERT INTO users (device_id) VALUES (?)');
+                const result = insertStmt.run(deviceId);
+                user = {
+                    id: result.lastInsertRowid,
+                    device_id: deviceId
+                };
+            }
+
+            res.json({ userId: user.id });
+
+        } finally {
+            db.close();
+        }
+
+    } catch (error) {
+        console.error('Error initializing user:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/user/session/start', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        
+        if (!userId) {
+            return res.status(400).json({
+                error: 'User ID is required'
+            });
+        }
+
+        const db = await getDb();
+        
+        try {
+            // Create new session
+            const stmt = db.prepare(
+                'INSERT INTO user_sessions (user_id, start_time) VALUES (?, ?)'
+            );
+            const result = stmt.run(userId, getCurrentTimestamp());
+
+            res.json({ 
+                sessionId: result.lastInsertRowid,
+                startTime: new Date().toISOString()
+            });
+
+        } finally {
+            db.close();
+        }
+
+    } catch (error) {
+        console.error('Error starting session:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/user/track-point', async (req, res) => {
+    try {
+        console.log('\n=== Incoming GPS Data ===');
+        console.log('Time:', new Date().toLocaleTimeString());
+        console.log('Request body:', JSON.stringify(req.body, null, 2));
+        
+        const { userId, sessionId, point } = req.body;
+        
+        if (!userId || !sessionId || !point) {
+            console.error('Missing required data:', { userId, sessionId, point });
+            return res.status(400).json({
+                error: 'User ID, session ID, and point data are required'
+            });
+        }
+
+        console.log('\nProcessed GPS Data:');
+        console.log(`- Coordinates: ${point.lat}°N, ${point.lon}°W`);
+        console.log(`- Elevation: ${point.elevation}m`);
+        console.log(`- Accuracy: ${point.accuracy}m`);
+        console.log(`- Speed: ${point.speed || 0} km/h`);
+        console.log(`- Heading: ${point.heading || 'N/A'}°`);
+        console.log('======================\n');
+
+        const db = await getDb();
+        
+        try {
+            // Verify user and session exist before proceeding
+            const userExists = db.prepare('SELECT 1 FROM users WHERE id = ?').get(userId);
+            if (!userExists) {
+                return res.status(400).json({
+                    error: 'Invalid user ID',
+                    code: 'INVALID_USER'
+                });
+            }
+
+            const sessionExists = db.prepare('SELECT 1 FROM user_sessions WHERE id = ? AND user_id = ?').get(sessionId, userId);
+            if (!sessionExists) {
+                return res.status(400).json({
+                    error: 'Invalid session ID or session does not belong to user',
+                    code: 'INVALID_SESSION'
+                });
+            }
+
+            // Begin transaction
+            db.exec('BEGIN TRANSACTION');
+
+            // Insert track point
+            const insertStmt = db.prepare(`
+                INSERT INTO user_track_points (
+                    user_id, session_id, latitude, longitude, 
+                    elevation, accuracy, timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            `);
+            
+            insertStmt.run(
+                userId,
+                sessionId,
+                point.lat,
+                point.lon,
+                point.elevation,
+                point.accuracy,
+                point.timestamp || getCurrentTimestamp()
+            );
+
+            // Update session statistics
+            const statsStmt = db.prepare(`
+                SELECT 
+                    COUNT(*) as point_count,
+                    MIN(elevation) as min_elevation,
+                    MAX(elevation) as max_elevation,
+                    AVG(elevation) as avg_elevation
+                FROM user_track_points
+                WHERE session_id = ?
+            `);
+            
+            const stats = statsStmt.get(sessionId);
+
+            const updateStmt = db.prepare(`
+                UPDATE user_sessions SET
+                    point_count = ?,
+                    min_elevation = ?,
+                    max_elevation = ?,
+                    avg_elevation = ?
+                WHERE id = ?
+            `);
+            
+            updateStmt.run(
+                stats.point_count,
+                stats.min_elevation,
+                stats.max_elevation,
+                stats.avg_elevation,
+                sessionId
+            );
+
+            // Commit transaction
+            db.exec('COMMIT');
+
+            res.json({ success: true, stats });
+
+        } catch (error) {
+            db.exec('ROLLBACK');
+            // Check for specific SQLite errors
+            if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+                return res.status(400).json({
+                    error: 'Invalid user ID or session ID',
+                    code: 'FOREIGN_KEY_VIOLATION',
+                    details: error.message
+                });
+            }
+            throw error;
+        } finally {
+            db.close();
+        }
+
+    } catch (error) {
+        console.error('Error saving track point:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            code: 'INTERNAL_ERROR',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 });
 
-// API endpoint to get elevation data
-app.get('/api/elevation-data', (req, res) => {
+app.post('/api/user/session/end', async (req, res) => {
     try {
-        const { bounds, offset = 0 } = req.query;
-        if (!bounds) {
-            return res.status(400).json({ error: 'Bounds parameter is required' });
+        const { userId, sessionId } = req.body;
+        
+        if (!userId || !sessionId) {
+            return res.status(400).json({
+                error: 'User ID and session ID are required'
+            });
         }
 
-        const [south, west, north, east] = bounds.split(',').map(Number);
-        if (bounds.split(',').length !== 4 || [south, west, north, east].some(isNaN)) {
-            return res.status(400).json({ error: 'Invalid bounds format. Expected: south,west,north,east' });
-        }
+        const db = await getDb();
         
-        console.log('Getting elevation data for bounds:', { south, west, north, east });
-        
-        // Generate grid key for this area
-        const gridKey = generateDbName({
-            minLat: south,
-            minLon: west,
-            maxLat: north,
-            maxLon: east
-        });
+        try {
+            // Calculate total distance
+            const pointsStmt = db.prepare(`
+                SELECT latitude, longitude
+                FROM user_track_points
+                WHERE session_id = ?
+                ORDER BY timestamp
+            `);
+            
+            const points = pointsStmt.all(sessionId);
 
-        // Get database connection
-        const db = getDb(gridKey);
+            let totalDistance = 0;
+            for (let i = 1; i < points.length; i++) {
+                totalDistance += calculateDistance(
+                    points[i-1].latitude,
+                    points[i-1].longitude,
+                    points[i].latitude,
+                    points[i].longitude
+                );
+            }
+
+            // Update session end time and distance
+            const updateStmt = db.prepare(`
+                UPDATE user_sessions SET
+                    end_time = ?,
+                    total_distance = ?
+                WHERE id = ?
+            `);
+            
+            const endTime = getCurrentTimestamp();
+            updateStmt.run(endTime, totalDistance, sessionId);
+
+            res.json({ 
+                success: true,
+                totalDistance,
+                endTime
+            });
+
+        } finally {
+            db.close();
+        }
+
+    } catch (error) {
+        console.error('Error ending session:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/user/:userId/sessions', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { limit = 10, offset = 0 } = req.query;
         
-        // Get points for the requested bounds
-        const points = db.prepare(`
-            SELECT latitude, longitude, elevation
-            FROM elevation_points
-            WHERE latitude BETWEEN ? AND ?
-            AND longitude BETWEEN ? AND ?
-            ORDER BY latitude, longitude
-            LIMIT 1000 OFFSET ?
-        `).all(south, north, west, east, parseInt(offset) || 0);
+        const db = await getDb();
         
-        // Get statistics
-        const stats = db.prepare(`
-            SELECT 
-                MIN(elevation) as min_elevation,
-                MAX(elevation) as max_elevation,
-                AVG(elevation) as avg_elevation,
-                COUNT(*) as total_count
-            FROM elevation_points
-            WHERE latitude BETWEEN ? AND ?
-            AND longitude BETWEEN ? AND ?
-        `).get(south, north, west, east);
+        try {
+            // Get user's sessions with statistics
+            const stmt = db.prepare(`
+                SELECT 
+                    id,
+                    start_time,
+                    end_time,
+                    total_distance,
+                    point_count,
+                    min_elevation,
+                    max_elevation,
+                    avg_elevation
+                FROM user_sessions
+                WHERE user_id = ?
+                ORDER BY start_time DESC
+                LIMIT ? OFFSET ?
+            `);
+            
+            const sessions = stmt.all(userId, limit, offset);
+
+            res.json({ sessions });
+
+        } finally {
+            db.close();
+        }
+
+    } catch (error) {
+        console.error('Error fetching sessions:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Test endpoint for elevation data
+app.get('/api/test-elevation', (req, res) => {
+    try {
+        const { lat, lon } = req.query;
         
-        console.log(`Found ${points.length} points in bounds`);
+        if (!lat || !lon) {
+            return res.status(400).json({
+                error: 'Missing required parameters: lat, lon'
+            });
+        }
+
+        // Convert lat/lon to numbers
+        const latitude = parseFloat(lat);
+        const longitude = parseFloat(lon);
+
+        // Validate coordinates
+        if (isNaN(latitude) || isNaN(longitude)) {
+            return res.status(400).json({
+                error: 'Invalid coordinates format'
+            });
+        }
+
+        // Basic bounds check for reasonable values
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+            return res.status(400).json({
+                error: 'Coordinates out of valid range'
+            });
+        }
+
+        // Calculate a simple elevation based on coordinates
+        const baseElevation = 1500; // Base elevation for New Mexico
+        const latEffect = (latitude - 34) * 100; // Higher in the north
+        const lonEffect = Math.sin(longitude * 0.5) * 200; // Variation based on longitude
+        const randomEffect = (Math.random() - 0.5) * 200; // Random variation
         
-        res.json({
-            success: true,
-            points,
-            stats: {
-                min_elevation: stats.min_elevation,
-                max_elevation: stats.max_elevation,
-                avg_elevation: stats.avg_elevation,
-                point_count: points.length,
-                total_points: stats.total_count,
-                hasMore: points.length === 1000,
-                chunkSize: 1000
+        let elevation = baseElevation + latEffect + lonEffect + randomEffect;
+        elevation = Math.max(1000, Math.min(4000, elevation)); // Keep within reasonable bounds
+        elevation = Math.round(elevation);
+
+        // Return elevation with metadata
+        res.json({ 
+            elevation,
+            metadata: {
+                lat: latitude,
+                lon: longitude,
+                source: 'test-simulation',
+                timestamp: new Date().toISOString(),
+                components: {
+                    base: baseElevation,
+                    latitudeEffect: latEffect,
+                    longitudeEffect: lonEffect,
+                    randomVariation: randomEffect
+                }
             }
         });
-        
+
     } catch (error) {
-        console.error('Error getting elevation data:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
+        console.error('Error in test elevation endpoint:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            details: error.message
         });
     }
+});
+
+// Version endpoint
+app.get('/api/version', (req, res) => {
+    res.json({
+        version: process.version,
+        environment: process.env.NODE_ENV || 'development'
+    });
 });
 
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
-    console.log('Current directory:', __dirname);
-    console.log('Grid databases directory:', GRID_DB_DIR);
-    console.log('Grid databases directory exists:', fs.existsSync(GRID_DB_DIR));
+    console.log('Current directory:', process.cwd());
+    console.log('Grid databases directory:', path.join(__dirname, 'grid_databases'));
+    console.log('\nGrid databases directory exists:', fs.existsSync(path.join(__dirname, 'grid_databases')));
 }); 

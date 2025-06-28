@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Elevation Tracker</title>
+    <link rel="stylesheet" href="css/gps_tracker.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+</head>
+<body>
+    <div class="container">
+        <div class="status-panel">
+            <div class="current-stats">
+                <div class="stat">
+                    <label>Latitude:</label>
+                    <span id="current-lat">--</span>
+                </div>
+                <div class="stat">
+                    <label>Longitude:</label>
+                    <span id="current-lon">--</span>
+                </div>
+                <div class="stat">
+                    <label>Elevation:</label>
+                    <span id="current-elevation">--</span>m
+                </div>
+                <div class="stat">
+                    <label>Accuracy:</label>
+                    <span id="gps-accuracy">--</span>m
+                </div>
+            </div>
+            <div class="tracking-stats">
+                <div class="stat">
+                    <label>Points Collected:</label>
+                    <span id="points-collected">0</span>
+                </div>
+                <div class="stat">
+                    <label>Distance:</label>
+                    <span id="total-distance">0</span>km
+                </div>
+                <div class="stat">
+                    <label>Duration:</label>
+                    <span id="tracking-duration">00:00:00</span>
+                </div>
+            </div>
+            <button id="start-tracking" class="primary-button">Start Tracking</button>
+            <button id="stop-tracking" class="secondary-button" disabled>Stop Tracking</button>
+        </div>
+        <div id="map" class="map-container"></div>
+        <div class="elevation-profile" id="elevation-profile"></div>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script type="module" src="js/gps_tracker.js"></script>
+</body>
+</html> 
