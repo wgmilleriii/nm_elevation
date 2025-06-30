@@ -1466,4 +1466,163 @@ app.use((err, req, res, next) => {
         error: 'Internal server error',
         message: err.message
     });
-}); 
+});
+
+// Add viewing area collection endpoints
+app.post('/api/viewing-area/collect', async (req, res) => {
+    try {
+        const { type, center, heading, points, metadata } = req.body;
+        
+        if (!points || !Array.isArray(points) || points.length === 0) {
+            return res.status(400).json({ error: 'Points array required' });
+        }
+
+        console.log(`📡 Received viewing area collection request: ${points.length} points`);
+        console.log(`🧭 Center: ${center.lat.toFixed(6)}, ${center.lon.toFixed(6)}, Heading: ${heading}°`);
+
+        // Add points to elevation processing queue
+        const db = getDatabase();
+        const insertStmt = db.prepare(`
+            INSERT OR IGNORE INTO gps_queue 
+            (lat, lon, timestamp, priority, source, metadata) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        `);
+
+        let addedCount = 0;
+        const timestamp = new Date().toISOString();
+
+        for (const point of points) {
+            try {
+                // Calculate priority based on ring and visibility
+                const priority = calculateViewingAreaPriority(point, center);
+                
+                const metadata_json = JSON.stringify({
+                    type: 'viewing_area',
+                    pointId: point.id,
+                    ringIndex: point.ringIndex,
+                    distance: point.distance,
+                    bearing: point.bearing,
+                    visible: point.visible,
+                    priority: point.priority,
+                    centerLat: center.lat,
+                    centerLon: center.lon,
+                    heading: heading
+                });
+
+                insertStmt.run(
+                    point.lat,
+                    point.lon,
+                    timestamp,
+                    priority,
+                    'viewing_area',
+                    metadata_json
+                );
+                addedCount++;
+            } catch (error) {
+                console.error('Error adding point to queue:', error);
+            }
+        }
+
+        console.log(`✅ Added ${addedCount}/${points.length} points to elevation queue`);
+
+        res.json({
+            success: true,
+            pointsQueued: addedCount,
+            totalPoints: points.length,
+            queueId: `viewing_area_${Date.now()}`,
+            estimatedTime: Math.ceil(addedCount / 25) * 2, // Rough estimate: 25 points per 2-second batch
+            metadata: {
+                center,
+                heading,
+                timestamp
+            }
+        });
+
+    } catch (error) {
+        console.error('Error processing viewing area collection request:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/viewing-area/results', async (req, res) => {
+    try {
+        const { pointIds } = req.body;
+        
+        if (!pointIds || !Array.isArray(pointIds)) {
+            return res.status(400).json({ error: 'Point IDs array required' });
+        }
+
+        const db = getDatabase();
+        
+        // Query for completed points
+        const placeholders = pointIds.map(() => '?').join(',');
+        const query = `
+            SELECT lat, lon, elevation, elevation_source, metadata
+            FROM gps_queue 
+            WHERE elevation IS NOT NULL 
+            AND JSON_EXTRACT(metadata, '$.pointId') IN (${placeholders})
+            ORDER BY priority DESC
+        `;
+
+        const results = db.prepare(query).all(...pointIds);
+        
+        // Parse results and add point IDs
+        const points = results.map(row => {
+            let metadata = {};
+            try {
+                metadata = JSON.parse(row.metadata || '{}');
+            } catch (e) {
+                console.warn('Failed to parse metadata:', row.metadata);
+            }
+
+            return {
+                id: metadata.pointId,
+                lat: row.lat,
+                lon: row.lon,
+                elevation: row.elevation,
+                elevationSource: row.elevation_source,
+                ringIndex: metadata.ringIndex,
+                distance: metadata.distance,
+                bearing: metadata.bearing,
+                visible: metadata.visible,
+                priority: metadata.priority
+            };
+        });
+
+        console.log(`📊 Returning ${points.length}/${pointIds.length} completed viewing area points`);
+
+        res.json({
+            success: true,
+            points,
+            totalRequested: pointIds.length,
+            totalCompleted: points.length,
+            completionRatio: points.length / pointIds.length,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('Error fetching viewing area results:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Helper function to calculate priority for viewing area points
+function calculateViewingAreaPriority(point, center) {
+    let priority = 50; // Base priority
+    
+    // Higher priority for closer points
+    if (point.distance < 1609) priority += 30; // Within 1 mile
+    else if (point.distance < 8047) priority += 20; // Within 5 miles
+    else if (point.distance < 32187) priority += 10; // Within 20 miles
+    
+    // Higher priority for visible points
+    if (point.visible) priority += 25;
+    
+    // Higher priority for certain ring indices (sweet spots)
+    if ([0, 2, 4, 7].includes(point.ringIndex)) priority += 15;
+    
+    // Add point's own priority
+    priority += (point.priority || 0) / 10;
+    
+    return Math.min(100, Math.max(1, Math.round(priority)));
+} 

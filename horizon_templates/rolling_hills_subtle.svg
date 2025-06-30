@@ -1,0 +1,21 @@
+
+        <svg width="800" height="300" viewBox="0 0 800 300">
+            <defs>
+                <linearGradient id="mountainGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#8B4513;stop-opacity:0.8"/>
+                    <stop offset="100%" style="stop-color:#DEB887;stop-opacity:0.3"/>
+                </linearGradient>
+                <linearGradient id="hillsGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#228B22;stop-opacity:0.7"/>
+                    <stop offset="100%" style="stop-color:#90EE90;stop-opacity:0.2"/>
+                </linearGradient>
+                <linearGradient id="mixedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#4682B4;stop-opacity:0.8"/>
+                    <stop offset="100%" style="stop-color:#B0C4DE;stop-opacity:0.2"/>
+                </linearGradient>
+            </defs>
+            <rect width="800" height="300" fill="url(#skyGradient)"/>
+            <path d="M0.0,207.81665988760787 L80.0,212.79092018134963 L160.0,212.6009100730249 L240.0,205.7296893871235 L320.0,190.40489649346242 L400.0,171.8511869051386 L480.0,163.1565970380342 L560.0,174.53848845438705 L640.0,201.26541327709944 L720.0,224.89282203462741 L800.0,228.69747158224084 L800,300 L0,300 Z" fill="url(#hillsGradient)" opacity="0.6"/>
+            <path d="M0.0,207.81665988760787 L80.0,212.79092018134963 L160.0,212.6009100730249 L240.0,205.7296893871235 L320.0,190.40489649346242 L400.0,171.8511869051386 L480.0,163.1565970380342 L560.0,174.53848845438705 L640.0,201.26541327709944 L720.0,224.89282203462741 L800.0,228.69747158224084" stroke="#228B22" stroke-width="2.5" fill="none"/>
+        </svg>
+        

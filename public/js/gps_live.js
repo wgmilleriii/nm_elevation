@@ -1,6 +1,10 @@
 // Version information
 const VERSION = '3.6.0';
 
+// Import new viewing area system
+import { ViewingArea } from './viewing-area.js';
+import { HorizonRenderer } from './horizon-renderer.js';
+
 class GPSLiveTracker {
     constructor() {
         this.tracking = false;
@@ -27,6 +31,15 @@ class GPSLiveTracker {
         this.timeWindow = 5 * 60 * 1000; // 5 minutes in milliseconds
         this.isMapInitialized = false;
         this.locationSource = 'unknown';
+
+        // Initialize viewing area system
+        this.viewingArea = new ViewingArea({
+            viewingAngle: 90,
+            pointDensity: 'adaptive'
+        });
+        this.horizonRenderer = null;
+        this.currentViewingAreaData = null;
+        this.elevationDataCache = new Map();
 
         // Initialize UI elements
         this.elements = {
@@ -70,6 +83,9 @@ class GPSLiveTracker {
         // Setup checkpoint modal
         this.setupCheckpointModal();
 
+        // Setup horizon view
+        this.setupHorizonView();
+
         // Setup unload handler for session management
         this.setupUnloadHandler();
 
@@ -98,6 +114,228 @@ class GPSLiveTracker {
                 console.error('❌ Failed to initialize user:', error);
                 alert('Failed to initialize tracking. Please try again.');
             });
+    }
+
+    /**
+     * Setup horizon view component
+     */
+    setupHorizonView() {
+        // Create horizon view container if it doesn't exist
+        let horizonContainer = document.getElementById('horizon-view');
+        if (!horizonContainer) {
+            horizonContainer = document.createElement('div');
+            horizonContainer.id = 'horizon-view';
+            horizonContainer.className = 'horizon-view';
+            horizonContainer.style.cssText = `
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                width: 400px;
+                height: 200px;
+                background: rgba(255, 255, 255, 0.95);
+                border: 2px solid #333;
+                border-radius: 8px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                z-index: 1000;
+                display: none;
+            `;
+            document.body.appendChild(horizonContainer);
+        }
+
+        // Initialize horizon renderer
+        this.horizonRenderer = new HorizonRenderer(horizonContainer, {
+            width: 380,
+            height: 180,
+            showGrid: true,
+            showLabels: true,
+            showRings: true
+        });
+
+        // Add toggle button
+        this.addHorizonToggleButton();
+
+        // Set up click handler for horizon interaction
+        this.horizonRenderer.setClickHandler((bearing, elevation, screenCoords) => {
+            console.log(`Horizon clicked: ${bearing.toFixed(1)}° bearing, ~${elevation.toFixed(0)}m elevation`);
+            // Could trigger data collection for that specific area
+        });
+    }
+
+    /**
+     * Add horizon view toggle button
+     */
+    addHorizonToggleButton() {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.id = 'horizon-toggle-btn';
+        toggleBtn.innerHTML = '🏔️ Horizon';
+        toggleBtn.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 420px;
+            padding: 8px 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 1001;
+        `;
+
+        toggleBtn.addEventListener('click', () => {
+            this.toggleHorizonView();
+        });
+
+        document.body.appendChild(toggleBtn);
+    }
+
+    /**
+     * Toggle horizon view visibility
+     */
+    toggleHorizonView() {
+        const horizonContainer = document.getElementById('horizon-view');
+        const toggleBtn = document.getElementById('horizon-toggle-btn');
+        
+        if (horizonContainer.style.display === 'none') {
+            horizonContainer.style.display = 'block';
+            toggleBtn.style.background = '#f44336';
+            toggleBtn.innerHTML = '✕ Close';
+            
+            // Update horizon view with current data
+            this.updateHorizonView();
+        } else {
+            horizonContainer.style.display = 'none';
+            toggleBtn.style.background = '#4CAF50';
+            toggleBtn.innerHTML = '🏔️ Horizon';
+        }
+    }
+
+    /**
+     * Update horizon view with current position and heading
+     */
+    updateHorizonView() {
+        if (!this.horizonRenderer || this.trackPoints.length === 0) return;
+
+        const currentPoint = this.trackPoints[this.trackPoints.length - 1];
+        const heading = this.lastHeading || this.compassHeading || 0;
+
+        // Calculate viewing area
+        this.currentViewingAreaData = this.viewingArea.calculateViewingArea(
+            currentPoint.lat,
+            currentPoint.lon,
+            heading,
+            currentPoint.elevation || 0
+        );
+
+        console.log('🏔️ Generated viewing area:', {
+            center: this.currentViewingAreaData.center,
+            heading: this.currentViewingAreaData.heading,
+            rings: this.currentViewingAreaData.rings.length,
+            totalPoints: this.currentViewingAreaData.totalPoints
+        });
+
+        // Request elevation data for viewing area points
+        this.requestViewingAreaElevations(this.currentViewingAreaData);
+
+        // Render current view (even without elevation data)
+        this.horizonRenderer.render(this.currentViewingAreaData, this.elevationDataCache);
+    }
+
+    /**
+     * Request elevation data for viewing area points
+     * @param {Object} viewingAreaData - Viewing area data
+     */
+    async requestViewingAreaElevations(viewingAreaData) {
+        try {
+            // Generate collection request
+            const collectionRequest = this.viewingArea.generateCollectionRequest(viewingAreaData);
+            
+            console.log('📡 Requesting elevation data for viewing area:', {
+                pointCount: collectionRequest.points.length,
+                center: collectionRequest.center,
+                heading: collectionRequest.heading
+            });
+
+            // Send request to elevation service
+            const response = await fetch('/api/viewing-area/collect', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(collectionRequest)
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                console.log('✅ Viewing area elevation request submitted:', result);
+                
+                // Start polling for results
+                this.pollForViewingAreaResults(collectionRequest.points);
+            } else {
+                console.warn('⚠️ Failed to submit viewing area request:', response.status);
+            }
+        } catch (error) {
+            console.error('❌ Error requesting viewing area elevations:', error);
+        }
+    }
+
+    /**
+     * Poll for viewing area elevation results
+     * @param {Array} requestedPoints - Points that were requested
+     */
+    async pollForViewingAreaResults(requestedPoints) {
+        const maxPolls = 30; // Poll for up to 30 seconds
+        let pollCount = 0;
+
+        const pollInterval = setInterval(async () => {
+            pollCount++;
+            
+            try {
+                // Check for elevation updates
+                const pointIds = requestedPoints.map(p => p.id);
+                const response = await fetch('/api/viewing-area/results', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ pointIds })
+                });
+
+                if (response.ok) {
+                    const results = await response.json();
+                    
+                    if (results.points && results.points.length > 0) {
+                        // Update elevation cache
+                        results.points.forEach(point => {
+                            if (point.elevation !== undefined) {
+                                this.elevationDataCache.set(point.id, point.elevation);
+                            }
+                        });
+
+                        // Update horizon view
+                        if (this.currentViewingAreaData) {
+                            this.horizonRenderer.updateElevationData(this.elevationDataCache);
+                        }
+
+                        console.log(`📊 Updated ${results.points.length} elevation points for horizon view`);
+                    }
+
+                    // Stop polling if we have enough data or reached max polls
+                    const completedPoints = results.points?.filter(p => p.elevation !== undefined).length || 0;
+                    if (completedPoints >= requestedPoints.length * 0.8 || pollCount >= maxPolls) {
+                        clearInterval(pollInterval);
+                        console.log(`🏁 Finished polling for viewing area results: ${completedPoints}/${requestedPoints.length} points`);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Error polling for viewing area results:', error);
+            }
+
+            if (pollCount >= maxPolls) {
+                clearInterval(pollInterval);
+                console.log('⏰ Stopped polling for viewing area results (timeout)');
+            }
+        }, 1000); // Poll every second
     }
 
     setupPopupHandlers() {
@@ -856,10 +1094,23 @@ class GPSLiveTracker {
         // Update speed history
         this.updateSpeedHistory();
 
+        // Update horizon view if it's visible
+        this.updateHorizonViewIfVisible();
+
         // Save point to database
         this.savePoint(point).catch(error => {
             console.error('Error saving point:', error);
         });
+    }
+
+    /**
+     * Update horizon view if it's currently visible
+     */
+    updateHorizonViewIfVisible() {
+        const horizonContainer = document.getElementById('horizon-view');
+        if (horizonContainer && horizonContainer.style.display !== 'none') {
+            this.updateHorizonView();
+        }
     }
 
     async getElevation(lat, lon) {

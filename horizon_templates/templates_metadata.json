@@ -1,0 +1,82 @@
+{
+  "mountain_peaks": {
+    "default": {
+      "png_file": "mountain_peaks_default.png",
+      "svg_file": "mountain_peaks_default.svg",
+      "line_count": 15,
+      "generated_at": "2025-06-30T12:13:11.549845"
+    },
+    "bold": {
+      "png_file": "mountain_peaks_bold.png",
+      "svg_file": "mountain_peaks_bold.svg",
+      "line_count": 15,
+      "generated_at": "2025-06-30T12:13:11.590979"
+    },
+    "subtle": {
+      "png_file": "mountain_peaks_subtle.png",
+      "svg_file": "mountain_peaks_subtle.svg",
+      "line_count": 15,
+      "generated_at": "2025-06-30T12:13:11.629863"
+    }
+  },
+  "rolling_hills": {
+    "default": {
+      "png_file": "rolling_hills_default.png",
+      "svg_file": "rolling_hills_default.svg",
+      "line_count": 11,
+      "generated_at": "2025-06-30T12:13:11.670037"
+    },
+    "bold": {
+      "png_file": "rolling_hills_bold.png",
+      "svg_file": "rolling_hills_bold.svg",
+      "line_count": 11,
+      "generated_at": "2025-06-30T12:13:11.706818"
+    },
+    "subtle": {
+      "png_file": "rolling_hills_subtle.png",
+      "svg_file": "rolling_hills_subtle.svg",
+      "line_count": 11,
+      "generated_at": "2025-06-30T12:13:11.743235"
+    }
+  },
+  "mixed_terrain": {
+    "default": {
+      "png_file": "mixed_terrain_default.png",
+      "svg_file": "mixed_terrain_default.svg",
+      "line_count": 18,
+      "generated_at": "2025-06-30T12:13:11.782298"
+    },
+    "bold": {
+      "png_file": "mixed_terrain_bold.png",
+      "svg_file": "mixed_terrain_bold.svg",
+      "line_count": 18,
+      "generated_at": "2025-06-30T12:13:11.822783"
+    },
+    "subtle": {
+      "png_file": "mixed_terrain_subtle.png",
+      "svg_file": "mixed_terrain_subtle.svg",
+      "line_count": 18,
+      "generated_at": "2025-06-30T12:13:11.866981"
+    }
+  },
+  "layered_depth": {
+    "default": {
+      "png_file": "layered_depth_default.png",
+      "svg_file": "layered_depth_default.svg",
+      "line_count": 20,
+      "generated_at": "2025-06-30T12:13:11.904466"
+    },
+    "bold": {
+      "png_file": "layered_depth_bold.png",
+      "svg_file": "layered_depth_bold.svg",
+      "line_count": 20,
+      "generated_at": "2025-06-30T12:13:11.942252"
+    },
+    "subtle": {
+      "png_file": "layered_depth_subtle.png",
+      "svg_file": "layered_depth_subtle.svg",
+      "line_count": 20,
+      "generated_at": "2025-06-30T12:13:11.983379"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+    "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+    "deviceId": "device_1751305552521_dn2z5a25rst",
+    "createdAt": "2025-06-30T17:45:52+00:00",
+    "lastActivity": "2025-06-30T18:34:03+00:00",
+    "sessions": [
+        {
+            "sessionId": "session_000002_user_be15fe6521d673c3326f3b58f451feaa_1751308443",
+            "globalNumber": 2,
+            "startTime": "2025-06-30T18:34:03+00:00",
+            "lastActivity": "2025-06-30T18:34:03+00:00",
+            "endTime": null,
+            "points": [],
+            "totalDistance": 0,
+            "pointCount": 0,
+            "status": "active",
+            "userAgent": "Mozilla\/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/138.0.0.0 Safari\/537.36",
+            "ipAddress": "127.0.0.1"
+        },
+        {
+            "sessionId": "session_000002_user_be15fe6521d673c3326f3b58f451feaa_1751308443",
+            "globalNumber": 2,
+            "startTime": "2025-06-30T18:34:03+00:00",
+            "lastActivity": "2025-06-30T18:34:03+00:00",
+            "endTime": null,
+            "points": [],
+            "totalDistance": 0,
+            "pointCount": 0,
+            "status": "active",
+            "userAgent": "Mozilla\/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/138.0.0.0 Safari\/537.36",
+            "ipAddress": "127.0.0.1"
+        }
+    ],
+    "totalPoints": 24
+}

@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horizon View Demo - New Mexico Elevation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .demo-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        label {
+            font-weight: bold;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        input, select, button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .horizon-container {
+            border: 2px solid #333;
+            border-radius: 8px;
+            margin: 20px 0;
+            background: white;
+        }
+        
+        .info-panel {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .info-value {
+            color: #333;
+        }
+        
+        .status {
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+        }
+        
+        .log-timestamp {
+            color: #bdc3c7;
+        }
+        
+        .log-level-info {
+            color: #3498db;
+        }
+        
+        .log-level-success {
+            color: #2ecc71;
+        }
+        
+        .log-level-warning {
+            color: #f39c12;
+        }
+        
+        .log-level-error {
+            color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏔️ Horizon View Demo</h1>
+        
+        <div class="demo-section">
+            <h2>Location & Viewing Parameters</h2>
+            <div class="controls">
+                <div class="control-group">
+                    <label>Latitude</label>
+                    <input type="number" id="latitude" value="35.0844" step="0.0001" min="31" max="37">
+                </div>
+                <div class="control-group">
+                    <label>Longitude</label>
+                    <input type="number" id="longitude" value="-106.6504" step="0.0001" min="-109" max="-103">
+                </div>
+                <div class="control-group">
+                    <label>Elevation (m)</label>
+                    <input type="number" id="elevation" value="1650" step="10" min="500" max="4000">
+                </div>
+                <div class="control-group">
+                    <label>Heading (°)</label>
+                    <input type="number" id="heading" value="0" step="1" min="0" max="359">
+                </div>
+                <div class="control-group">
+                    <label>Viewing Angle (°)</label>
+                    <select id="viewingAngle">
+                        <option value="45">45° (Narrow)</option>
+                        <option value="90" selected>90° (Normal)</option>
+                        <option value="120">120° (Wide)</option>
+                        <option value="180">180° (Panoramic)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Point Density</label>
+                    <select id="pointDensity">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="adaptive" selected>Adaptive</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button id="generateBtn">Generate Horizon View</button>
+                </div>
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button id="requestElevationBtn" disabled>Request Elevation Data</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="demo-section">
+            <h2>Horizon Visualization</h2>
+            <div id="status" class="status loading">Ready to generate horizon view</div>
+            <div id="horizonContainer" class="horizon-container">
+                <!-- Horizon renderer will be inserted here -->
+            </div>
+        </div>
+        
+        <div class="demo-section">
+            <h2>Viewing Area Information</h2>
+            <div class="info-panel">
+                <div class="info-grid">
+                    <div>
+                        <div class="info-item">
+                            <span class="info-label">Total Rings:</span>
+                            <span class="info-value" id="totalRings">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Total Points:</span>
+                            <span class="info-value" id="totalPoints">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Visible Points:</span>
+                            <span class="info-value" id="visiblePoints">--</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="info-item">
+                            <span class="info-label">Min Distance:</span>
+                            <span class="info-value" id="minDistance">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Max Distance:</span>
+                            <span class="info-value" id="maxDistance">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Elevation Points:</span>
+                            <span class="info-value" id="elevationPoints">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="demo-section">
+            <h2>Activity Log</h2>
+            <div id="logContainer" class="log-container">
+                <div class="log-entry">
+                    <span class="log-timestamp">[Ready]</span> 
+                    <span class="log-level-info">Horizon demo initialized</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { ViewingArea } from './js/viewing-area.js';
+        import { HorizonRenderer } from './js/horizon-renderer.js';
+
+        class HorizonDemo {
+            constructor() {
+                this.viewingArea = new ViewingArea();
+                this.horizonRenderer = null;
+                this.currentViewingAreaData = null;
+                this.elevationCache = new Map();
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.log('info', 'Demo ready - Click "Generate Horizon View" to start');
+            }
+
+            initializeElements() {
+                this.elements = {
+                    latitude: document.getElementById('latitude'),
+                    longitude: document.getElementById('longitude'),
+                    elevation: document.getElementById('elevation'),
+                    heading: document.getElementById('heading'),
+                    viewingAngle: document.getElementById('viewingAngle'),
+                    pointDensity: document.getElementById('pointDensity'),
+                    generateBtn: document.getElementById('generateBtn'),
+                    requestElevationBtn: document.getElementById('requestElevationBtn'),
+                    status: document.getElementById('status'),
+                    horizonContainer: document.getElementById('horizonContainer'),
+                    totalRings: document.getElementById('totalRings'),
+                    totalPoints: document.getElementById('totalPoints'),
+                    visiblePoints: document.getElementById('visiblePoints'),
+                    minDistance: document.getElementById('minDistance'),
+                    maxDistance: document.getElementById('maxDistance'),
+                    elevationPoints: document.getElementById('elevationPoints'),
+                    logContainer: document.getElementById('logContainer')
+                };
+            }
+
+            setupEventListeners() {
+                this.elements.generateBtn.addEventListener('click', () => {
+                    this.generateHorizonView();
+                });
+
+                this.elements.requestElevationBtn.addEventListener('click', () => {
+                    this.requestElevationData();
+                });
+
+                // Auto-generate when parameters change
+                ['latitude', 'longitude', 'elevation', 'heading', 'viewingAngle', 'pointDensity'].forEach(id => {
+                    this.elements[id].addEventListener('change', () => {
+                        if (this.currentViewingAreaData) {
+                            this.generateHorizonView();
+                        }
+                    });
+                });
+            }
+
+            generateHorizonView() {
+                try {
+                    this.setStatus('loading', 'Generating viewing area...');
+                    this.log('info', 'Starting horizon view generation');
+
+                    // Get parameters
+                    const lat = parseFloat(this.elements.latitude.value);
+                    const lon = parseFloat(this.elements.longitude.value);
+                    const elevation = parseFloat(this.elements.elevation.value);
+                    const heading = parseFloat(this.elements.heading.value);
+                    const viewingAngle = parseInt(this.elements.viewingAngle.value);
+                    const pointDensity = this.elements.pointDensity.value;
+
+                    // Validate parameters
+                    if (isNaN(lat) || isNaN(lon) || isNaN(elevation) || isNaN(heading)) {
+                        throw new Error('Invalid numeric parameters');
+                    }
+
+                    // Update viewing area options
+                    this.viewingArea.options.viewingAngle = viewingAngle;
+                    this.viewingArea.options.pointDensity = pointDensity;
+
+                    // Calculate viewing area
+                    this.currentViewingAreaData = this.viewingArea.calculateViewingArea(
+                        lat, lon, heading, elevation
+                    );
+
+                    this.log('success', `Generated viewing area with ${this.currentViewingAreaData.totalPoints} points`);
+
+                    // Initialize horizon renderer if needed
+                    if (!this.horizonRenderer) {
+                        this.horizonRenderer = new HorizonRenderer(this.elements.horizonContainer, {
+                            width: 800,
+                            height: 300,
+                            showGrid: true,
+                            showLabels: true,
+                            showRings: true
+                        });
+
+                        this.horizonRenderer.setClickHandler((bearing, elevation, coords) => {
+                            this.log('info', `Clicked: ${bearing.toFixed(1)}° bearing, ~${elevation.toFixed(0)}m elevation`);
+                        });
+                    }
+
+                    // Render horizon view
+                    this.horizonRenderer.render(this.currentViewingAreaData, this.elevationCache);
+
+                    // Update info panel
+                    this.updateInfoPanel();
+
+                    // Enable elevation request button
+                    this.elements.requestElevationBtn.disabled = false;
+
+                    this.setStatus('success', 'Horizon view generated successfully');
+
+                } catch (error) {
+                    this.log('error', `Error generating horizon view: ${error.message}`);
+                    this.setStatus('error', `Error: ${error.message}`);
+                }
+            }
+
+            async requestElevationData() {
+                if (!this.currentViewingAreaData) {
+                    this.log('warning', 'No viewing area data available');
+                    return;
+                }
+
+                try {
+                    this.setStatus('loading', 'Requesting elevation data...');
+                    this.elements.requestElevationBtn.disabled = true;
+
+                    // Generate collection request
+                    const collectionRequest = this.viewingArea.generateCollectionRequest(this.currentViewingAreaData);
+                    
+                    this.log('info', `Requesting elevation for ${collectionRequest.points.length} points`);
+
+                    // Send request to server
+                    const response = await fetch('/api/viewing-area/collect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(collectionRequest)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    this.log('success', `Elevation request submitted: ${result.pointsQueued}/${result.totalPoints} points queued`);
+                    this.log('info', `Estimated processing time: ${result.estimatedTime} seconds`);
+
+                    // Start polling for results
+                    this.pollForResults(collectionRequest.points);
+
+                } catch (error) {
+                    this.log('error', `Error requesting elevation data: ${error.message}`);
+                    this.setStatus('error', `Error: ${error.message}`);
+                    this.elements.requestElevationBtn.disabled = false;
+                }
+            }
+
+            async pollForResults(requestedPoints) {
+                const maxPolls = 60; // Poll for up to 60 seconds
+                let pollCount = 0;
+                let lastCompletedCount = 0;
+
+                const pollInterval = setInterval(async () => {
+                    pollCount++;
+
+                    try {
+                        const pointIds = requestedPoints.map(p => p.id);
+                        const response = await fetch('/api/viewing-area/results', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ pointIds })
+                        });
+
+                        if (response.ok) {
+                            const results = await response.json();
+                            
+                            if (results.points && results.points.length > lastCompletedCount) {
+                                // Update elevation cache
+                                results.points.forEach(point => {
+                                    if (point.elevation !== undefined) {
+                                        this.elevationCache.set(point.id, point.elevation);
+                                    }
+                                });
+
+                                // Update horizon view
+                                if (this.horizonRenderer && this.currentViewingAreaData) {
+                                    this.horizonRenderer.updateElevationData(this.elevationCache);
+                                }
+
+                                // Update info panel
+                                this.updateInfoPanel();
+
+                                const newPoints = results.points.length - lastCompletedCount;
+                                this.log('success', `Received ${newPoints} new elevation points (${results.points.length}/${requestedPoints.length} total)`);
+                                lastCompletedCount = results.points.length;
+                            }
+
+                            // Check completion
+                            const completionRatio = results.completionRatio || 0;
+                            if (completionRatio >= 0.8 || pollCount >= maxPolls) {
+                                clearInterval(pollInterval);
+                                this.setStatus('success', `Elevation data collection complete: ${Math.round(completionRatio * 100)}%`);
+                                this.log('success', `Finished polling: ${Math.round(completionRatio * 100)}% completion`);
+                                this.elements.requestElevationBtn.disabled = false;
+                            } else {
+                                this.setStatus('loading', `Collecting elevation data: ${Math.round(completionRatio * 100)}%`);
+                            }
+                        }
+                    } catch (error) {
+                        this.log('error', `Polling error: ${error.message}`);
+                    }
+
+                    if (pollCount >= maxPolls) {
+                        clearInterval(pollInterval);
+                        this.setStatus('error', 'Elevation collection timeout');
+                        this.log('warning', 'Stopped polling due to timeout');
+                        this.elements.requestElevationBtn.disabled = false;
+                    }
+                }, 1000);
+            }
+
+            updateInfoPanel() {
+                if (!this.currentViewingAreaData) return;
+
+                const data = this.currentViewingAreaData;
+                
+                this.elements.totalRings.textContent = data.rings.length;
+                this.elements.totalPoints.textContent = data.totalPoints;
+                
+                let visibleCount = 0;
+                data.rings.forEach(ring => {
+                    ring.points.forEach(point => {
+                        if (point.visible) visibleCount++;
+                    });
+                });
+                this.elements.visiblePoints.textContent = visibleCount;
+
+                const distances = data.rings.map(r => r.distanceMiles);
+                this.elements.minDistance.textContent = `${Math.min(...distances).toFixed(1)} mi`;
+                this.elements.maxDistance.textContent = `${Math.max(...distances).toFixed(1)} mi`;
+                this.elements.elevationPoints.textContent = this.elevationCache.size;
+            }
+
+            setStatus(type, message) {
+                this.elements.status.className = `status ${type}`;
+                this.elements.status.textContent = message;
+            }
+
+            log(level, message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.innerHTML = `
+                    <span class="log-timestamp">[${timestamp}]</span> 
+                    <span class="log-level-${level}">${message}</span>
+                `;
+                
+                this.elements.logContainer.appendChild(logEntry);
+                this.elements.logContainer.scrollTop = this.elements.logContainer.scrollHeight;
+
+                // Keep only last 50 entries
+                while (this.elements.logContainer.children.length > 50) {
+                    this.elements.logContainer.removeChild(this.elements.logContainer.firstChild);
+                }
+            }
+        }
+
+        // Initialize demo when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new HorizonDemo();
+        });
+    </script>
+</body>
+</html> 

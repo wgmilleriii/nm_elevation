@@ -1,0 +1,25 @@
+<svg width="800" height="300" viewBox="0 0 800 300">
+<defs>
+
+            <linearGradient id="layer0Gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#2F4F4F;stop-opacity:0.9"/>
+                <stop offset="100%" style="stop-color:#2F4F4F;stop-opacity:0.27"/>
+            </linearGradient>
+            
+            <linearGradient id="layer1Gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#4682B4;stop-opacity:0.7"/>
+                <stop offset="100%" style="stop-color:#4682B4;stop-opacity:0.21"/>
+            </linearGradient>
+            
+            <linearGradient id="layer2Gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#87CEEB;stop-opacity:0.5"/>
+                <stop offset="100%" style="stop-color:#87CEEB;stop-opacity:0.15"/>
+            </linearGradient>
+            </defs>
+<path d="M0.0,225.0 L40.0,217.0 L80.0,209.0 L120.0,201.0 L160.0,193.0 L200.0,185.0 L200.0,300 L0.0,300 Z" fill="url(#layer0Gradient)"/>
+<path d="M0.0,225.0 L40.0,217.0 L80.0,209.0 L120.0,201.0 L160.0,193.0 L200.0,185.0" stroke="#2F4F4F" stroke-width="2" fill="none" opacity="0.9"/>
+<path d="M160.0,150.0 L217.14285714285714,164.34712181799046 L274.2857142857143,169.9914720608301 L331.42857142857144,163.50926361102302 L388.57142857142856,148.8325171314484 L445.7142857142857,134.86395009384142 L502.8571428571429,130.0767078232832 L560.0,137.37466724255358 L560.0,300 L160.0,300 Z" fill="url(#layer1Gradient)"/>
+<path d="M160.0,150.0 L217.14285714285714,164.34712181799046 L274.2857142857143,169.9914720608301 L331.42857142857144,163.50926361102302 L388.57142857142856,148.8325171314484 L445.7142857142857,134.86395009384142 L502.8571428571429,130.0767078232832 L560.0,137.37466724255358" stroke="#4682B4" stroke-width="2" fill="none" opacity="0.7"/>
+<path d="M520.0,165.0 L576.0,173.46963710092552 L632.0,178.98058628950838 L688.0,179.60771446317293 L744.0,175.13194770826726 L800.0,167.116800120898 L800.0,300 L520.0,300 Z" fill="url(#layer2Gradient)"/>
+<path d="M520.0,165.0 L576.0,173.46963710092552 L632.0,178.98058628950838 L688.0,179.60771446317293 L744.0,175.13194770826726 L800.0,167.116800120898" stroke="#87CEEB" stroke-width="2" fill="none" opacity="0.5"/>
+</svg>

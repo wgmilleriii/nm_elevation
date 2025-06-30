@@ -1,0 +1,244 @@
+{
+    "points": [
+        {
+            "id": 1,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305556.6065",
+            "lat": 40.51291159459985,
+            "lon": -105.02314477637317,
+            "timestamp": 1751305555836,
+            "addedToQueue": "2025-06-30T17:45:56+00:00"
+        },
+        {
+            "id": 2,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305556.6069",
+            "lat": 40.512906167527845,
+            "lon": -105.02312702639315,
+            "timestamp": 1751305555899,
+            "addedToQueue": "2025-06-30T17:45:56+00:00"
+        },
+        {
+            "id": 3,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305556.6072",
+            "lat": 40.512906183741634,
+            "lon": -105.02312667796886,
+            "timestamp": 1751305555899,
+            "addedToQueue": "2025-06-30T17:45:56+00:00"
+        },
+        {
+            "id": 4,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305556.611",
+            "lat": 40.51291159459985,
+            "lon": -105.02314477637317,
+            "timestamp": 1751305555857,
+            "addedToQueue": "2025-06-30T17:45:56+00:00"
+        },
+        {
+            "id": 5,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305560.8432",
+            "lat": 40.51288923069724,
+            "lon": -105.02304150307461,
+            "timestamp": 1751305560621,
+            "addedToQueue": "2025-06-30T17:46:00+00:00"
+        },
+        {
+            "id": 6,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305574.4768",
+            "lat": 40.512902806934775,
+            "lon": -105.02306031971428,
+            "timestamp": 1751305574078,
+            "addedToQueue": "2025-06-30T17:46:14+00:00"
+        },
+        {
+            "id": 7,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305588.0196",
+            "lat": 40.512919863074934,
+            "lon": -105.023061329568,
+            "timestamp": 1751305587609,
+            "addedToQueue": "2025-06-30T17:46:28+00:00"
+        },
+        {
+            "id": 8,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305601.498",
+            "lat": 40.512933443717564,
+            "lon": -105.02309188932696,
+            "timestamp": 1751305601102,
+            "addedToQueue": "2025-06-30T17:46:41+00:00"
+        },
+        {
+            "id": 9,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305615.0565",
+            "lat": 40.512928577019494,
+            "lon": -105.02310103420828,
+            "timestamp": 1751305614641,
+            "addedToQueue": "2025-06-30T17:46:55+00:00"
+        },
+        {
+            "id": 10,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305628.4846",
+            "lat": 40.51288851925695,
+            "lon": -105.02302990920262,
+            "timestamp": 1751305628077,
+            "addedToQueue": "2025-06-30T17:47:08+00:00"
+        },
+        {
+            "id": 11,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305642.0133",
+            "lat": 40.51288716192973,
+            "lon": -105.02302114886207,
+            "timestamp": 1751305641612,
+            "addedToQueue": "2025-06-30T17:47:22+00:00"
+        },
+        {
+            "id": 12,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305655.5413",
+            "lat": 40.51287554509568,
+            "lon": -105.02303575734643,
+            "timestamp": 1751305655112,
+            "addedToQueue": "2025-06-30T17:47:35+00:00"
+        },
+        {
+            "id": 13,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305669.1761",
+            "lat": 40.5129455888465,
+            "lon": -105.02297026013991,
+            "timestamp": 1751305668738,
+            "addedToQueue": "2025-06-30T17:47:49+00:00"
+        },
+        {
+            "id": 14,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305682.651",
+            "lat": 40.51295213778683,
+            "lon": -105.02291568704669,
+            "timestamp": 1751305682235,
+            "addedToQueue": "2025-06-30T17:48:02+00:00"
+        },
+        {
+            "id": 15,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305696.1924",
+            "lat": 40.512993409936804,
+            "lon": -105.02288628832686,
+            "timestamp": 1751305695760,
+            "addedToQueue": "2025-06-30T17:48:16+00:00"
+        },
+        {
+            "id": 16,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305709.7968",
+            "lat": 40.5129588593455,
+            "lon": -105.02308810697394,
+            "timestamp": 1751305709382,
+            "addedToQueue": "2025-06-30T17:48:29+00:00"
+        },
+        {
+            "id": 17,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305723.3473",
+            "lat": 40.51293016477297,
+            "lon": -105.02314598901418,
+            "timestamp": 1751305722929,
+            "addedToQueue": "2025-06-30T17:48:43+00:00"
+        },
+        {
+            "id": 18,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305736.8596",
+            "lat": 40.51278022001067,
+            "lon": -105.02236964191415,
+            "timestamp": 1751305736412,
+            "addedToQueue": "2025-06-30T17:48:56+00:00"
+        },
+        {
+            "id": 19,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305750.579",
+            "lat": 40.5126267997099,
+            "lon": -105.02166866544643,
+            "timestamp": 1751305750030,
+            "addedToQueue": "2025-06-30T17:49:10+00:00"
+        },
+        {
+            "id": 20,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305764.0239",
+            "lat": 40.512473120375475,
+            "lon": -105.02100614313085,
+            "timestamp": 1751305763595,
+            "addedToQueue": "2025-06-30T17:49:24+00:00"
+        },
+        {
+            "id": 21,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305777.5755",
+            "lat": 40.51248781266319,
+            "lon": -105.02069633427541,
+            "timestamp": 1751305777140,
+            "addedToQueue": "2025-06-30T17:49:37+00:00"
+        },
+        {
+            "id": 22,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305791.136",
+            "lat": 40.51182193481035,
+            "lon": -105.02040023837176,
+            "timestamp": 1751305790700,
+            "addedToQueue": "2025-06-30T17:49:51+00:00"
+        },
+        {
+            "id": 23,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305804.7059",
+            "lat": 40.5110707972662,
+            "lon": -105.0201916267012,
+            "timestamp": 1751305804247,
+            "addedToQueue": "2025-06-30T17:50:04+00:00"
+        },
+        {
+            "id": 24,
+            "userId": "user_be15fe6521d673c3326f3b58f451feaa",
+            "sessionId": "session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552",
+            "pointId": "point_user_be15fe6521d673c3326f3b58f451feaa_session_000001_user_be15fe6521d673c3326f3b58f451feaa_1751305552_1751305818.2533",
+            "lat": 40.50972964954693,
+            "lon": -105.02013077664031,
+            "timestamp": 1751305817813,
+            "addedToQueue": "2025-06-30T17:50:18+00:00"
+        }
+    ]
+}

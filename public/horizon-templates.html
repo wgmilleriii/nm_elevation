@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horizon Drawing Templates - New Mexico Elevation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+        
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .template-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+        
+        .template-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .template-description {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        
+        .horizon-svg {
+            width: 100%;
+            height: 250px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: linear-gradient(to bottom, #87CEEB 0%, #B0E0E6 70%, #F0F8FF 100%);
+        }
+        
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .control-btn {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f8f9fa;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .control-btn:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+        }
+        
+        .control-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .stats {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .terrain-line {
+            stroke-width: 2;
+            fill: none;
+        }
+        
+        .terrain-fill {
+            opacity: 0.3;
+        }
+        
+        .mountain-peaks {
+            stroke: #8B4513;
+            fill: #DEB887;
+        }
+        
+        .rolling-hills {
+            stroke: #228B22;
+            fill: #90EE90;
+        }
+        
+        .mixed-terrain {
+            stroke: #4682B4;
+            fill: #B0C4DE;
+        }
+        
+        .layered-depth {
+            stroke: #2F4F4F;
+            fill: #708090;
+        }
+        
+        .elevation-point {
+            fill: #FF6347;
+            stroke: #FF4500;
+            stroke-width: 1;
+        }
+        
+        .distance-marker {
+            stroke: #999;
+            stroke-width: 1;
+            stroke-dasharray: 2,2;
+            opacity: 0.5;
+        }
+        
+        .python-examples {
+            margin-top: 40px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .example-images {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .example-image {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .example-image img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .example-image h4 {
+            margin: 10px 0 5px 0;
+            color: #333;
+        }
+        
+        .example-image p {
+            font-size: 12px;
+            color: #666;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏔️ Horizon Drawing Templates</h1>
+        <p class="subtitle">Static examples of interesting horizon visualizations using 10-20 jagged lines</p>
+        
+        <div class="template-grid">
+            <!-- Template 1: Mountain Peaks -->
+            <div class="template-card">
+                <div class="template-title">
+                    🗻 Mountain Peaks
+                </div>
+                <div class="template-description">
+                    Sharp, dramatic peaks with varying heights. Demonstrates how 15 strategic lines can create compelling mountain silhouettes without overwhelming detail.
+                </div>
+                <svg class="horizon-svg" id="mountainPeaks">
+                    <defs>
+                        <linearGradient id="mountainGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#8B4513;stop-opacity:0.8"/>
+                            <stop offset="100%" style="stop-color:#DEB887;stop-opacity:0.3"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Distance markers -->
+                    <g class="distance-markers">
+                        <line class="distance-marker" x1="120" y1="0" x2="120" y2="250"/>
+                        <line class="distance-marker" x1="240" y1="0" x2="240" y2="250"/>
+                        <line class="distance-marker" x1="360" y1="0" x2="360" y2="250"/>
+                        <line class="distance-marker" x1="480" y1="0" x2="480" y2="250"/>
+                        <text x="125" y="15" font-size="10" fill="#666">5mi</text>
+                        <text x="245" y="15" font-size="10" fill="#666">20mi</text>
+                        <text x="365" y="15" font-size="10" fill="#666">50mi</text>
+                        <text x="485" y="15" font-size="10" fill="#666">100mi</text>
+                    </g>
+                    <!-- Mountain horizon lines -->
+                    <path class="terrain-line mountain-peaks" 
+                          d="M0,200 L50,180 L80,120 L120,100 L150,140 L200,80 L250,90 L300,60 L350,110 L400,70 L450,130 L500,90 L550,160 L600,180"
+                          stroke="#8B4513" stroke-width="3"/>
+                    <path class="terrain-fill mountain-peaks" 
+                          d="M0,200 L50,180 L80,120 L120,100 L150,140 L200,80 L250,90 L300,60 L350,110 L400,70 L450,130 L500,90 L550,160 L600,180 L600,250 L0,250 Z"
+                          fill="url(#mountainGradient)"/>
+                    <!-- Peak elevation points -->
+                    <circle class="elevation-point" cx="300" cy="60" r="3"/>
+                    <circle class="elevation-point" cx="200" cy="80" r="3"/>
+                    <circle class="elevation-point" cx="400" cy="70" r="3"/>
+                </svg>
+                <div class="controls">
+                    <button class="control-btn active" onclick="toggleStyle('mountainPeaks', 'peaks')">Sharp Peaks</button>
+                    <button class="control-btn" onclick="toggleStyle('mountainPeaks', 'smooth')">Smooth</button>
+                    <button class="control-btn" onclick="toggleStyle('mountainPeaks', 'detailed')">Detailed</button>
+                </div>
+                <div class="stats">
+                    Lines: 14 | Elevation Range: 2,100-3,800m | Visible Distance: 100 miles
+                </div>
+            </div>
+
+            <!-- Template 2: Rolling Hills -->
+            <div class="template-card">
+                <div class="template-title">
+                    🌄 Rolling Hills
+                </div>
+                <div class="template-description">
+                    Gentle, undulating terrain with smooth transitions. Shows how fewer lines (10-12) can effectively represent gradual elevation changes.
+                </div>
+                <svg class="horizon-svg" id="rollingHills">
+                    <defs>
+                        <linearGradient id="hillsGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#228B22;stop-opacity:0.7"/>
+                            <stop offset="100%" style="stop-color:#90EE90;stop-opacity:0.2"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Distance markers -->
+                    <g class="distance-markers">
+                        <line class="distance-marker" x1="150" y1="0" x2="150" y2="250"/>
+                        <line class="distance-marker" x1="300" y1="0" x2="300" y2="250"/>
+                        <line class="distance-marker" x1="450" y1="0" x2="450" y2="250"/>
+                        <text x="155" y="15" font-size="10" fill="#666">10mi</text>
+                        <text x="305" y="15" font-size="10" fill="#666">25mi</text>
+                        <text x="455" y="15" font-size="10" fill="#666">50mi</text>
+                    </g>
+                    <!-- Rolling hills horizon -->
+                    <path class="terrain-line rolling-hills" 
+                          d="M0,180 Q100,160 150,170 T300,160 Q400,150 450,160 T600,170"
+                          stroke="#228B22" stroke-width="2.5"/>
+                    <path class="terrain-fill rolling-hills" 
+                          d="M0,180 Q100,160 150,170 T300,160 Q400,150 450,160 T600,170 L600,250 L0,250 Z"
+                          fill="url(#hillsGradient)"/>
+                    <!-- Gentle elevation points -->
+                    <circle class="elevation-point" cx="150" cy="170" r="2"/>
+                    <circle class="elevation-point" cx="300" cy="160" r="2"/>
+                    <circle class="elevation-point" cx="450" cy="160" r="2"/>
+                </svg>
+                <div class="controls">
+                    <button class="control-btn active" onclick="toggleStyle('rollingHills', 'gentle')">Gentle</button>
+                    <button class="control-btn" onclick="toggleStyle('rollingHills', 'moderate')">Moderate</button>
+                    <button class="control-btn" onclick="toggleStyle('rollingHills', 'steep')">Steep</button>
+                </div>
+                <div class="stats">
+                    Lines: 11 | Elevation Range: 1,400-1,800m | Visible Distance: 50 miles
+                </div>
+            </div>
+
+            <!-- Template 3: Mixed Terrain -->
+            <div class="template-card">
+                <div class="template-title">
+                    🏞️ Mixed Terrain
+                </div>
+                <div class="template-description">
+                    Combination of peaks, valleys, and plateaus. Demonstrates how 18 lines can show complex terrain while maintaining visual clarity.
+                </div>
+                <svg class="horizon-svg" id="mixedTerrain">
+                    <defs>
+                        <linearGradient id="mixedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#4682B4;stop-opacity:0.8"/>
+                            <stop offset="50%" style="stop-color:#87CEEB;stop-opacity:0.5"/>
+                            <stop offset="100%" style="stop-color:#B0C4DE;stop-opacity:0.2"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Distance markers -->
+                    <g class="distance-markers">
+                        <line class="distance-marker" x1="100" y1="0" x2="100" y2="250"/>
+                        <line class="distance-marker" x1="200" y1="0" x2="200" y2="250"/>
+                        <line class="distance-marker" x1="400" y1="0" x2="400" y2="250"/>
+                        <line class="distance-marker" x1="500" y1="0" x2="500" y2="250"/>
+                        <text x="105" y="15" font-size="10" fill="#666">2mi</text>
+                        <text x="205" y="15" font-size="10" fill="#666">10mi</text>
+                        <text x="405" y="15" font-size="10" fill="#666">30mi</text>
+                        <text x="505" y="15" font-size="10" fill="#666">75mi</text>
+                    </g>
+                    <!-- Mixed terrain horizon -->
+                    <path class="terrain-line mixed-terrain" 
+                          d="M0,190 L40,185 L80,160 L120,140 L160,145 L200,120 L240,125 L280,100 L320,110 L360,95 L400,130 L440,125 L480,150 L520,145 L560,165 L600,170"
+                          stroke="#4682B4" stroke-width="2.5"/>
+                    <path class="terrain-fill mixed-terrain" 
+                          d="M0,190 L40,185 L80,160 L120,140 L160,145 L200,120 L240,125 L280,100 L320,110 L360,95 L400,130 L440,125 L480,150 L520,145 L560,165 L600,170 L600,250 L0,250 Z"
+                          fill="url(#mixedGradient)"/>
+                    <!-- Key elevation points -->
+                    <circle class="elevation-point" cx="280" cy="100" r="3"/>
+                    <circle class="elevation-point" cx="360" cy="95" r="3"/>
+                    <circle class="elevation-point" cx="200" cy="120" r="2"/>
+                    <circle class="elevation-point" cx="400" cy="130" r="2"/>
+                </svg>
+                <div class="controls">
+                    <button class="control-btn active" onclick="toggleStyle('mixedTerrain', 'balanced')">Balanced</button>
+                    <button class="control-btn" onclick="toggleStyle('mixedTerrain', 'dramatic')">Dramatic</button>
+                    <button class="control-btn" onclick="toggleStyle('mixedTerrain', 'subtle')">Subtle</button>
+                </div>
+                <div class="stats">
+                    Lines: 18 | Elevation Range: 1,200-3,200m | Visible Distance: 75 miles
+                </div>
+            </div>
+
+            <!-- Template 4: Layered Depth -->
+            <div class="template-card">
+                <div class="template-title">
+                    🌌 Layered Depth
+                </div>
+                <div class="template-description">
+                    Multiple horizon layers showing atmospheric perspective. Uses 20 lines across 3 distance layers to create depth illusion.
+                </div>
+                <svg class="horizon-svg" id="layeredDepth">
+                    <defs>
+                        <linearGradient id="depthGradient1" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#2F4F4F;stop-opacity:0.9"/>
+                            <stop offset="100%" style="stop-color:#708090;stop-opacity:0.3"/>
+                        </linearGradient>
+                        <linearGradient id="depthGradient2" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#4682B4;stop-opacity:0.6"/>
+                            <stop offset="100%" style="stop-color:#B0C4DE;stop-opacity:0.2"/>
+                        </linearGradient>
+                        <linearGradient id="depthGradient3" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#87CEEB;stop-opacity:0.4"/>
+                            <stop offset="100%" style="stop-color:#E0F6FF;stop-opacity:0.1"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Distance markers -->
+                    <g class="distance-markers">
+                        <line class="distance-marker" x1="150" y1="0" x2="150" y2="250"/>
+                        <line class="distance-marker" x1="300" y1="0" x2="300" y2="250"/>
+                        <line class="distance-marker" x1="450" y1="0" x2="450" y2="250"/>
+                        <text x="75" y="15" font-size="10" fill="#666">Near</text>
+                        <text x="225" y="15" font-size="10" fill="#666">Mid</text>
+                        <text x="375" y="15" font-size="10" fill="#666">Far</text>
+                        <text x="525" y="15" font-size="10" fill="#666">Distant</text>
+                    </g>
+                    <!-- Far layer (most distant) -->
+                    <path class="terrain-line layered-depth" 
+                          d="M450,140 L480,135 L520,130 L560,135 L600,140"
+                          stroke="#87CEEB" stroke-width="1.5" opacity="0.6"/>
+                    <path class="terrain-fill" 
+                          d="M450,140 L480,135 L520,130 L560,135 L600,140 L600,250 L450,250 Z"
+                          fill="url(#depthGradient3)"/>
+                    
+                    <!-- Mid layer -->
+                    <path class="terrain-line layered-depth" 
+                          d="M150,160 L200,150 L250,145 L300,155 L350,150 L400,160 L450,155"
+                          stroke="#4682B4" stroke-width="2" opacity="0.7"/>
+                    <path class="terrain-fill" 
+                          d="M150,160 L200,150 L250,145 L300,155 L350,150 L400,160 L450,155 L450,250 L150,250 Z"
+                          fill="url(#depthGradient2)"/>
+                    
+                    <!-- Near layer (closest) -->
+                    <path class="terrain-line layered-depth" 
+                          d="M0,200 L50,190 L100,180 L150,185"
+                          stroke="#2F4F4F" stroke-width="3" opacity="0.9"/>
+                    <path class="terrain-fill" 
+                          d="M0,200 L50,190 L100,180 L150,185 L150,250 L0,250 Z"
+                          fill="url(#depthGradient1)"/>
+                    
+                    <!-- Elevation points for each layer -->
+                    <circle class="elevation-point" cx="100" cy="180" r="3" opacity="0.9"/>
+                    <circle class="elevation-point" cx="300" cy="155" r="2" opacity="0.7"/>
+                    <circle class="elevation-point" cx="520" cy="130" r="1.5" opacity="0.6"/>
+                </svg>
+                <div class="controls">
+                    <button class="control-btn active" onclick="toggleStyle('layeredDepth', 'atmospheric')">Atmospheric</button>
+                    <button class="control-btn" onclick="toggleStyle('layeredDepth', 'clear')">Clear Day</button>
+                    <button class="control-btn" onclick="toggleStyle('layeredDepth', 'hazy')">Hazy</button>
+                </div>
+                <div class="stats">
+                    Lines: 20 (3 layers) | Elevation Range: 800-2,800m | Visible Distance: 100+ miles
+                </div>
+            </div>
+        </div>
+
+        <!-- Python Examples Section -->
+        <div class="python-examples">
+            <div class="template-title">
+                🐍 Python-Generated Templates
+            </div>
+            <div class="template-description">
+                Server-side generated horizon templates using matplotlib and numpy. These demonstrate the same concepts but with Python's advanced mathematical and rendering capabilities.
+            </div>
+            
+            <div class="example-images">
+                <div class="example-image">
+                    <img src="../horizon_templates/horizon_comparison.png" alt="Horizon Comparison Chart" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div style="display:none; padding: 40px; background: #f0f0f0; border: 2px dashed #ccc; color: #666;">
+                        Python templates will appear here after running:<br>
+                        <code>python3 generate_horizon_templates.py</code>
+                    </div>
+                    <h4>Template Comparison</h4>
+                    <p>All four template types showing line count and terrain characteristics</p>
+                </div>
+                
+                <div class="example-image">
+                    <img src="../horizon_templates/mountain_peaks_default.png" alt="Mountain Peaks Template" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div style="display:none; padding: 20px; background: #f0f0f0; border: 2px dashed #ccc; color: #666;">
+                        Mountain peaks template
+                    </div>
+                    <h4>Mountain Peaks (Python)</h4>
+                    <p>15 lines with sharp elevation changes and random peak variations</p>
+                </div>
+                
+                <div class="example-image">
+                    <img src="../horizon_templates/rolling_hills_default.png" alt="Rolling Hills Template" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div style="display:none; padding: 20px; background: #f0f0f0; border: 2px dashed #ccc; color: #666;">
+                        Rolling hills template
+                    </div>
+                    <h4>Rolling Hills (Python)</h4>
+                    <p>11 lines using sine wave combinations for natural rolling terrain</p>
+                </div>
+                
+                <div class="example-image">
+                    <img src="../horizon_templates/mixed_terrain_default.png" alt="Mixed Terrain Template" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div style="display:none; padding: 20px; background: #f0f0f0; border: 2px dashed #ccc; color: #666;">
+                        Mixed terrain template
+                    </div>
+                    <h4>Mixed Terrain (Python)</h4>
+                    <p>18 lines combining peaks, valleys, and plateaus with mathematical precision</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="template-card">
+            <div class="template-title">
+                📊 Template Analysis & Implementation Strategy
+            </div>
+            <div class="template-description">
+                These templates demonstrate the core philosophy: <strong>intelligent data curation over raw data flooding</strong>. Each shows how strategic line selection creates compelling visuals.
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
+                <div style="padding: 15px; background: #e8f4fd; border-radius: 6px; border-left: 4px solid #007bff;">
+                    <strong>Line Economy</strong><br>
+                    <small>10-20 lines maximum per view<br>Focus on visual impact, not data density</small>
+                </div>
+                <div style="padding: 15px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #28a745;">
+                    <strong>Smart Curation</strong><br>
+                    <small>Mine existing elevation cache<br>Return interesting features only</small>
+                </div>
+                <div style="padding: 15px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
+                    <strong>Artistic Rendering</strong><br>
+                    <small>Jagged, varied silhouettes<br>Multiple shading and style options</small>
+                </div>
+                <div style="padding: 15px; background: #f8d7da; border-radius: 6px; border-left: 4px solid #dc3545;">
+                    <strong>Depth Layering</strong><br>
+                    <small>Near/mid/far atmospheric effects<br>Progressive opacity and detail</small>
+                </div>
+            </div>
+            
+            <div style="margin-top: 25px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                <h4 style="margin-top: 0; color: #333;">Next Implementation Steps:</h4>
+                <ol style="color: #555; line-height: 1.6;">
+                    <li><strong>Enhanced HorizonRenderer</strong>: Add line simplification algorithms to reduce point density</li>
+                    <li><strong>Interest Detection</strong>: Implement peak/valley detection for feature prioritization</li>
+                    <li><strong>Style Variations</strong>: Add atmospheric effects, time-of-day variations, weather conditions</li>
+                    <li><strong>Dynamic Templates</strong>: Use these static examples as templates for real-time generation</li>
+                    <li><strong>Performance Optimization</strong>: Cache simplified horizon lines for repeated viewing areas</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleStyle(svgId, style) {
+            const svg = document.getElementById(svgId);
+            const buttons = svg.parentElement.querySelectorAll('.control-btn');
+            
+            // Update button states
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Apply style changes based on template and style
+            const terrainLines = svg.querySelectorAll('.terrain-line');
+            const terrainFills = svg.querySelectorAll('.terrain-fill');
+            
+            switch(style) {
+                case 'peaks':
+                case 'sharp':
+                case 'dramatic':
+                    terrainLines.forEach(line => {
+                        line.style.strokeWidth = '3';
+                        line.style.opacity = '1';
+                    });
+                    break;
+                case 'smooth':
+                case 'gentle':
+                case 'subtle':
+                    terrainLines.forEach(line => {
+                        line.style.strokeWidth = '2';
+                        line.style.opacity = '0.8';
+                    });
+                    break;
+                case 'detailed':
+                case 'moderate':
+                case 'balanced':
+                    terrainLines.forEach(line => {
+                        line.style.strokeWidth = '2.5';
+                        line.style.opacity = '0.9';
+                    });
+                    break;
+                case 'atmospheric':
+                    terrainLines.forEach((line, i) => {
+                        line.style.opacity = 0.9 - (i * 0.2);
+                    });
+                    break;
+                case 'clear':
+                    terrainLines.forEach(line => {
+                        line.style.opacity = '1';
+                    });
+                    break;
+                case 'hazy':
+                    terrainLines.forEach(line => {
+                        line.style.opacity = '0.6';
+                    });
+                    break;
+            }
+        }
+
+        // Add interactive hover effects
+        document.querySelectorAll('.elevation-point').forEach(point => {
+            point.addEventListener('mouseenter', function() {
+                this.style.r = (parseFloat(this.getAttribute('r')) * 1.5) + 'px';
+                this.style.fill = '#FF4500';
+            });
+            
+            point.addEventListener('mouseleave', function() {
+                this.style.r = this.getAttribute('r') + 'px';
+                this.style.fill = '#FF6347';
+            });
+        });
+
+        // Add click handlers for terrain lines
+        document.querySelectorAll('.terrain-line').forEach(line => {
+            line.addEventListener('click', function() {
+                console.log('Terrain line clicked:', this.parentElement.id);
+                // Could trigger detailed view or data collection
+            });
+        });
+
+        // Log template interaction for development
+        console.log('🏔️ Horizon Templates Loaded');
+        console.log('Templates demonstrate 10-20 line horizon drawing strategy');
+        console.log('Ready for integration with dynamic viewing area system');
+    </script>
+</body>
+</html>

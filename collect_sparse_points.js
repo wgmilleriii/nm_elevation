@@ -25,6 +25,13 @@ const collectionDirection = process.argv.includes('--direction=ne_to_sw')
         ? COLLECTION_DIRECTIONS.SOUTHWEST_TO_NORTHEAST
         : process.env.COLLECTION_DIRECTION || COLLECTION_DIRECTIONS.SOUTHWEST_TO_NORTHEAST;
 
+// Get state from command line argument or environment variable
+const targetState = process.argv.includes('--state=colorado') || process.argv.includes('--state=co')
+    ? 'colorado'
+    : process.argv.includes('--state=new-mexico') || process.argv.includes('--state=nm')
+        ? 'new-mexico'
+        : process.env.TARGET_STATE || 'new-mexico'; // Default to New Mexico
+
 const API_BATCH_SIZES = {
     'srtm30m': 100,     // OpenTopoData limit
     'aster30m': 100,    // OpenTopoData limit
@@ -42,6 +49,30 @@ const NM_BOUNDS = {
     minLon: -109.05,
     maxLon: -103.00
 };
+
+// Colorado bounds (from web search data)
+const CO_BOUNDS = {
+    minLat: 37.00,
+    maxLat: 41.00,
+    minLon: -109.07,  // W 109°07'
+    maxLon: -102.00   // W 102°00'
+};
+
+// Get current bounds based on target state
+const getCurrentBounds = () => {
+    return targetState === 'colorado' ? CO_BOUNDS : NM_BOUNDS;
+};
+
+// Queue processing configuration
+const QUEUE_PROCESSING = {
+    enabled: true,
+    maxQueuePoints: 100,  // Process up to 100 queue points per run
+    queuePriority: 1,     // Queue points get highest priority (1 = highest)
+    gridPriority: 2       // Grid points get lower priority (2 = lower)
+};
+
+// Remote server configuration for queue processing
+const REMOTE_SERVER_URL = process.env.REMOTE_SERVER_URL || 'https://hanon.artsmetrics.net/elevation';
 
 // API configurations - using batch-capable APIs
 const APIS = [
@@ -151,6 +182,69 @@ const API_STATUS = {
 
 // Add last successful API tracking
 let lastSuccessfulApiIndex = -1;
+
+// Queue processing functions
+async function fetchQueuePoints() {
+    if (!QUEUE_PROCESSING.enabled) return [];
+    
+    try {
+        logProgress(`Fetching GPS queue points from ${REMOTE_SERVER_URL}`);
+        const response = await fetch(`${REMOTE_SERVER_URL}/api/gps-queue?limit=${QUEUE_PROCESSING.maxQueuePoints}&status=pending`);
+        
+        if (!response.ok) {
+            logError(new Error(`Queue fetch failed: ${response.status}`), 'fetchQueuePoints');
+            return [];
+        }
+        
+        const data = await response.json();
+        const queuePoints = data.points || [];
+        
+        // Filter points to current state bounds
+        const bounds = getCurrentBounds();
+        const filteredPoints = queuePoints.filter(point => {
+            const lat = point.lat || point.latitude;
+            const lon = point.lon || point.longitude;
+            
+            return lat >= bounds.minLat && lat <= bounds.maxLat &&
+                   lon >= bounds.minLon && lon <= bounds.maxLon;
+        });
+        
+        logProgress(`Found ${queuePoints.length} total queue points, ${filteredPoints.length} in ${targetState} bounds`);
+        
+        // Convert to standard format
+        return filteredPoints.map(point => ({
+            lat: point.lat || point.latitude,
+            lon: point.lon || point.longitude,
+            priority: QUEUE_PROCESSING.queuePriority,
+            source: 'gps_queue',
+            userId: point.userId,
+            sessionId: point.sessionId,
+            pointId: point.pointId || point.id
+        }));
+        
+    } catch (error) {
+        logError(error, 'fetchQueuePoints');
+        return [];
+    }
+}
+
+async function markQueuePointProcessed(pointId) {
+    if (!pointId) return;
+    
+    try {
+        const response = await fetch(`${REMOTE_SERVER_URL}/api/gps-queue/mark-processed`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pointId })
+        });
+        
+        if (!response.ok) {
+            logError(new Error(`Failed to mark point ${pointId} as processed: ${response.status}`), 'markQueuePointProcessed');
+        }
+    } catch (error) {
+        logError(error, `markQueuePointProcessed for ${pointId}`);
+    }
+}
 
 // Modify calculateGridPoints to handle different directions
 function calculateGridPoints(bounds, numPoints) {
@@ -395,7 +489,11 @@ async function fetchElevations(points, api) {
 }
 
 // Modify collectHierarchicalPoints to handle different directions
-async function collectHierarchicalPoints(db, level = 0, parentBounds = NM_BOUNDS, parentI = 0, parentJ = 0) {
+async function collectHierarchicalPoints(db, level = 0, parentBounds = null, parentI = 0, parentJ = 0) {
+    // Use current bounds if none provided
+    if (!parentBounds) {
+        parentBounds = getCurrentBounds();
+    }
     if (level >= GRID_LEVELS.length) {
         return;
     }
@@ -609,7 +707,7 @@ async function findMostIncompleteDatabase() {
     // First, try to find an existing incomplete database
     for (let i = 0; i < gridSize; i++) {
         for (let j = 0; j < gridSize; j++) {
-            const dbPath = path.join(GRID_DB_DIR, `mountains_${i}_${j}.db`);
+            const dbPath = path.join(GRID_DB_DIR, `${targetState === 'colorado' ? 'colorado' : 'mountains'}_${i}_${j}.db`);
             
             try {
                 if (!fs.existsSync(dbPath)) {
@@ -644,25 +742,67 @@ async function findMostIncompleteDatabase() {
     }
 
     // If all databases are complete or there was an error, start a new one at 0,0
-    const newDbPath = path.join(GRID_DB_DIR, 'mountains_0_0.db');
+    const newDbPath = path.join(GRID_DB_DIR, `${targetState === 'colorado' ? 'colorado' : 'mountains'}_0_0.db`);
     const db = new Database(newDbPath);
     db.exec(DB_SCHEMA);
     db.close();
     return { x: 0, y: 0, points: 0, completion: 0 };
 }
 
-// Modify main function to include enhanced logging
+// Enhanced main function with queue processing priority
 async function main() {
     try {
-        // Find the next database to process without locking
+        logProgress(`Starting collection for ${targetState.toUpperCase()} with bounds: ${JSON.stringify(getCurrentBounds())}`);
+        
+        // PRIORITY 1: Process GPS queue points first
+        const queuePoints = await fetchQueuePoints();
+        if (queuePoints.length > 0) {
+            logProgress(`Processing ${queuePoints.length} GPS queue points with PRIORITY 1`);
+            
+            // Process queue points in batches
+            for (let i = 0; i < queuePoints.length; i += DEFAULT_BATCH_SIZE) {
+                const batch = queuePoints.slice(i, i + DEFAULT_BATCH_SIZE);
+                logProgress(`Processing queue batch ${Math.floor(i/DEFAULT_BATCH_SIZE) + 1}/${Math.ceil(queuePoints.length/DEFAULT_BATCH_SIZE)}`);
+                
+                try {
+                    const elevationResults = await processBatch(batch);
+                    
+                    // Store results and mark as processed
+                    for (let j = 0; j < elevationResults.length; j++) {
+                        const point = elevationResults[j];
+                        const originalPoint = batch[j];
+                        
+                        if (point && point.elevation !== null) {
+                            // Store in appropriate database
+                            await storeQueuePoint(point, originalPoint);
+                            
+                            // Mark as processed in queue
+                            if (originalPoint.pointId) {
+                                await markQueuePointProcessed(originalPoint.pointId);
+                            }
+                        }
+                    }
+                    
+                    // Delay between batches
+                    await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+                    
+                } catch (error) {
+                    logError(error, `Processing queue batch ${Math.floor(i/DEFAULT_BATCH_SIZE) + 1}`);
+                }
+            }
+            
+            logProgress(`Completed processing ${queuePoints.length} GPS queue points`);
+        }
+        
+        // PRIORITY 2: Continue with grid-based collection
         const db = await findMostIncompleteDatabase();
         if (!db) {
-            console.log('No available databases to process.');
+            console.log('No available databases to process for grid collection.');
             return;
         }
 
-        const dbPath = path.join(GRID_DB_DIR, `mountains_${db.x}_${db.y}.db`);
-        logDatabaseStatus(dbPath, 'Starting processing');
+        const dbPath = path.join(GRID_DB_DIR, `${targetState === 'colorado' ? 'colorado' : 'mountains'}_${db.x}_${db.y}.db`);
+        logDatabaseStatus(dbPath, `Starting ${targetState} grid processing`);
         
         // Initialize database connection
         const database = new Database(dbPath);
@@ -674,12 +814,14 @@ async function main() {
             
             logDatabaseStatus(dbPath, 'Initial state', {
                 currentPoints,
-                remaining: 10000 - currentPoints
+                remaining: 10000 - currentPoints,
+                state: targetState
             });
             
             if (currentPoints >= 10000) {
                 logDatabaseStatus(dbPath, 'Database complete', {
-                    points: currentPoints
+                    points: currentPoints,
+                    state: targetState
                 });
                 return;
             }
@@ -687,14 +829,15 @@ async function main() {
             // Log initial source distribution
             logSourceDistribution(database, dbPath);
             
-            // Process the database
-            await collectHierarchicalPoints(database, 0, NM_BOUNDS, db.x, db.y);
+            // Process the database with current bounds
+            await collectHierarchicalPoints(database, 0, getCurrentBounds(), db.x, db.y);
             
             // Final check and logging
             const finalResult = database.prepare('SELECT COUNT(*) as count FROM points').get();
             logDatabaseStatus(dbPath, 'Processing complete', {
                 finalPoints: finalResult.count,
-                targetMet: finalResult.count >= 10000 ? 'Yes' : 'No'
+                targetMet: finalResult.count >= 10000 ? 'Yes' : 'No',
+                state: targetState
             });
             
             // Log final source distribution
@@ -708,6 +851,53 @@ async function main() {
     } catch (error) {
         console.error('Error in main:', error);
         logError(error, 'Error in main process');
+    }
+}
+
+// Store queue point in appropriate database
+async function storeQueuePoint(elevationPoint, originalPoint) {
+    try {
+        // Determine which grid cell this point belongs to
+        const bounds = getCurrentBounds();
+        const gridSize = 20; // Using 20x20 grid like the original system
+        
+        const latStep = (bounds.maxLat - bounds.minLat) / gridSize;
+        const lonStep = (bounds.maxLon - bounds.minLon) / gridSize;
+        
+        const cellI = Math.floor((elevationPoint.lat - bounds.minLat) / latStep);
+        const cellJ = Math.floor((elevationPoint.lon - bounds.minLon) / lonStep);
+        
+        // Clamp to valid range
+        const clampedI = Math.max(0, Math.min(gridSize - 1, cellI));
+        const clampedJ = Math.max(0, Math.min(gridSize - 1, cellJ));
+        
+        const dbPath = path.join(GRID_DB_DIR, `${targetState === 'colorado' ? 'colorado' : 'mountains'}_${clampedI}_${clampedJ}.db`);
+        
+        // Create database if it doesn't exist
+        if (!fs.existsSync(dbPath)) {
+            const db = new Database(dbPath);
+            db.exec(DB_SCHEMA);
+            db.close();
+        }
+        
+        const db = new Database(dbPath);
+        try {
+            // Check if point already exists
+            if (!checkPointExists(db, elevationPoint.lat, elevationPoint.lon)) {
+                const stmt = db.prepare(`
+                    INSERT INTO points (lat, lon, elevation, source, timestamp)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                `);
+                stmt.run(elevationPoint.lat, elevationPoint.lon, elevationPoint.elevation, elevationPoint.source);
+                
+                logProgress(`Stored queue point in ${dbPath}: ${elevationPoint.lat.toFixed(6)}, ${elevationPoint.lon.toFixed(6)}, ${elevationPoint.elevation}m`);
+            }
+        } finally {
+            db.close();
+        }
+        
+    } catch (error) {
+        logError(error, 'storeQueuePoint');
     }
 }
 
